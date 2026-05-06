@@ -1,0 +1,2587 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NYT Check System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #f3f4f6; font-size: 16px; margin: 0; padding: 0;} 
+        
+        /* --- UI Components สำหรับหน้าเว็บหลัก --- */
+        .check-table { width: 100%; border-collapse: collapse; background: white; font-size: 16px; } 
+        .check-table th { background-color: #a7f3d0; color: #065f46; border: 1px solid #059669; padding: 10px; text-align: center; }
+        .check-table td { border: 1px solid #d1d5db; padding: 10px; vertical-align: middle; }
+        .check-cat-header { background-color: #dcfce7; font-weight: bold; text-align: left; padding-left: 15px; border: 1px solid #059669; color: #065f46; }
+        .radio-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+        .radio-label { cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 15px; }
+        .signature-box { border-bottom: 1px dotted #000; display: inline-block; min-width: 180px; text-align: center; color: #000; font-weight: bold; padding-bottom: 4px; font-size: 16px; }
+        
+        .doc-expired { background-color: #fee2e2; color: #b91c1c; border: 1px solid #dc2626; font-weight: bold; }
+        .doc-ok { background-color: #dcfce7; color: #15803d; border: 1px solid #16a34a; }
+        .doc-warn { background-color: #fef9c3; color: #a16207; border: 1px solid #ca8a04; }
+        .doc-danger { background-color: #ffedd5; color: #c2410c; border: 1px solid #f97316; }
+        .doc-none { background-color: #f3f4f6; color: #6b7280; border: 1px dashed #9ca3af; }
+        
+        @keyframes highlight-fade { 0% { background-color: #fecaca; } 50% { background-color: #fca5a5; } 100% { background-color: transparent; } }
+        .highlight-row { animation: highlight-fade 2.5s ease-out; border: 3px solid #ef4444 !important; }
+
+        .tab-btn { padding: 10px 20px; font-weight: bold; border-bottom: 4px solid transparent; color: #6b7280; cursor: pointer; }
+        .tab-btn.active { color: #1e3a8a; border-bottom-color: #1e3a8a; background-color: #eff6ff; }
+        
+        .setting-tab { padding: 12px 16px; margin-right: 4px; border-radius: 8px 8px 0 0; font-weight: bold; cursor: pointer; border: 1px solid transparent; border-bottom: none; background: #e5e7eb; color: #6b7280; }
+        .setting-tab:hover { background-color: #d1d5db; color: #374151; }
+        .setting-tab.active { background-color: white; color: #1e40af; border-color: #cbd5e1; border-bottom: 4px solid white; margin-bottom: -2px; z-index: 10; border-top: 4px solid #1e40af; }
+        
+        .factory-card { background: white; padding: 15px; border-radius: 8px; border-left: 5px solid #ccc; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); cursor: pointer; transition: 0.2s; position: relative; overflow: hidden; }
+        .factory-card:hover { transform: scale(1.02); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2); }
+        .fac-green { border-left-color: #22c55e; background-color: #f0fdf4; }
+        .fac-yellow { border-left-color: #eab308; background-color: #fefce8; }
+        .fac-red { border-left-color: #ef4444; background-color: #fef2f2; }
+        
+        .rank-card { text-align: center; padding: 20px; border-radius: 15px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); color: white; position: relative; overflow: hidden; min-width: 150px; }
+        .rank-1 { background: linear-gradient(135deg, #FFD700, #FDB931); transform: scale(1.1); z-index: 10; border: 4px solid #fff; }
+        .rank-2 { background: linear-gradient(135deg, #E0E0E0, #BDBDBD); transform: translateY(15px); }
+        .rank-3 { background: linear-gradient(135deg, #CD7F32, #A0522D); transform: translateY(30px); }
+        .rank-num { font-size: 4rem; font-weight: bold; line-height: 1; opacity: 0.3; position: absolute; top: -10px; right: 10px; }
+
+        .login-bg { background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); }
+        .glass-panel { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .maintenance-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.98); z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+
+        /* ==================================================================== */
+        /* --- PRINT & PDF CSS --- */
+        /* ==================================================================== */
+        #print-wrapper { position: absolute; left: -10000px; top: 0; width: 210mm; background: white; z-index: -1000; }
+        
+        @media print {
+            @page { margin: 0; }
+            body { background-color: white !important; margin: 0; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; font-family: 'Sarabun', sans-serif; }
+            #main-interface, .swal2-container, .no-print { display: none !important; }
+            #print-wrapper { position: relative !important; left: 0 !important; top: 0 !important; width: 100% !important; z-index: 1000 !important; display: block !important; }
+            
+            /* ใบปะหน้าแนวนอน */
+            @page landscape_page { size: A4 landscape; margin: 0; }
+            .print-cover-page { page: landscape_page; width: 297mm !important; height: 209mm !important; max-height: 209mm !important; overflow: hidden !important; page-break-after: always; padding: 8mm 12mm !important; margin: 0 !important; box-shadow: none !important; border: none !important; }
+            
+            /* ใบตรวจแนวตั้ง */
+            @page portrait_page { size: A4 portrait; margin: 0; }
+            .print-page { page: portrait_page; margin: 0 auto !important; box-shadow: none !important; padding: 8mm 12mm !important; border: none !important; page-break-after: always; width: 210mm !important; height: 296mm !important; max-height: 296mm !important; overflow: hidden !important; }
+
+            #print-wrapper > div:last-child { page-break-after: auto !important; }
+        }
+
+        /* --- CSS ใบปะหน้า (แนวนอน) --- */
+        .print-cover-page { 
+            width: 297mm; 
+            height: 209mm; 
+            max-height: 209mm;
+            background: white; 
+            padding: 8mm 12mm; 
+            box-sizing: border-box; 
+            font-family: 'Sarabun', sans-serif; 
+            color: #000; 
+            margin: 0 auto; 
+            page-break-after: always; 
+            display: flex; 
+            flex-direction: column; 
+            overflow: hidden; 
+        }
+        
+        .cp-content-top { width: 100%; } 
+        
+        .cp-header { text-align: center; font-weight: bold; font-size: 15pt; margin-bottom: 5px; color: #1e3a8a; }
+        .cp-sub { display: flex; justify-content: space-between; align-items: flex-start; font-size: 11pt; margin-bottom: 10px; }
+        .cp-table { width: 100%; border-collapse: collapse; font-size: 7.5pt; text-align: center; }
+        .cp-table th, .cp-table td { border: 1px solid #000; padding: 3px; word-break: break-word; }
+        .cp-table th { background-color: #f3f4f6; font-weight: bold; padding: 4px;}
+
+        /* --- CSS ใบตรวจ (แนวตั้ง) --- */
+        .print-page { width: 210mm; height: 296mm; max-height: 296mm; background-color: white; padding: 8mm 12mm; box-sizing: border-box; color: #000; font-family: 'Sarabun', sans-serif; margin: 0 auto; display: flex; flex-direction: column; overflow: hidden; page-break-after: always; }
+        
+        .pdf-t-collapse { border-collapse: collapse; width: 100%; table-layout: fixed; }
+        .pdf-title { font-size: 18pt; font-weight: bold; color: #15803d; margin-bottom: 2px; line-height: 1.1;}
+        .pdf-subtitle { font-size: 10pt; font-weight: bold; color: #166534; letter-spacing: 0.5px; }
+        .pdf-info-table { border: 2px solid #15803d; font-size: 8.5pt; margin-bottom: 8px; width: 100%; border-collapse: collapse;}
+        .pdf-info-table td { border: 1px solid #15803d; padding: 3px 5px; vertical-align: middle; }
+        .pdf-info-label { background-color: #dcfce7; color: #15803d; font-weight: bold; text-align: left; width: 12%; white-space: nowrap; }
+        .pdf-info-val { font-weight: bold; color: #000; width: 21%; }
+        .pdf-cat-table { width: 100%; border-collapse: collapse; border: 1px solid #15803d; font-size: 7.5pt; margin-bottom: 6px; }
+        .pdf-cat-table th { background-color: #dcfce7; color: #15803d; padding: 3px 5px; font-weight: bold; text-align: left; border: 1px solid #15803d; font-size: 8pt; }
+        .pdf-cat-table td { border: 1px solid #e5e7eb; padding: 2px 4px; vertical-align: middle; word-wrap: break-word; word-break: break-word; white-space: normal; line-height: 1.15; }
+        
+        .cat-col-name { width: 75%; font-weight: bold; color: #111827; }
+        .cat-col-res { width: 25%; text-align: center; vertical-align: middle; }
+        
+        .res-ok { color: #15803d; font-weight: bold; } 
+        .res-fail { color: #dc2626; font-weight: bold; } 
+        .res-none { color: #6b7280; font-weight: bold; } 
+
+        .pdf-qty { font-size: 6.5pt; color: #444; display: block; } 
+        .pdf-extra { font-size: 6.5pt; font-weight: bold; color: #1e40af; display: block; border-top: 1px dotted #ccc; margin-top: 1px; word-break: break-word; } 
+        .pdf-note { font-size: 6.5pt; color: #dc2626; font-weight: bold; display: block; word-break: break-word; }
+
+        .pdf-suggestion { background-color: #f0fdf4; border: 1px dashed #15803d; padding: 5px 8px; font-size: 8.5pt; color: #166534; min-height: 30px; margin-bottom: 10px; border-radius: 4px; font-weight: bold; word-break: break-word; white-space: pre-wrap;}
+        .pdf-sig-container { display: table; width: 100%; border-collapse: collapse; margin-top: 5px; table-layout: fixed;}
+        .pdf-sig-box { display: table-cell; width: 50%; text-align: center; vertical-align: bottom; }
+        .pdf-sig-name { font-size: 10pt; font-weight: bold; color: #15803d; margin-bottom: 2px; }
+        .pdf-sig-line { border-bottom: 1px dotted #15803d; width: 200px; margin: 0 auto 3px; height: 12px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 2px; color: #1e40af; font-size: 11pt;}
+        .pdf-sig-role { font-size: 8pt; color: #333; font-weight: bold; }
+        .pdf-sig-date { font-size: 7pt; color: #6b7280; margin-top: 2px; }
+    </style>
+</head>
+<body id="app">
+
+    <div v-if="loading" class="fixed inset-0 bg-black/80 z-[10000] flex flex-col items-center justify-center text-white no-print">
+        <div class="animate-spin rounded-full h-14 w-14 border-t-4 border-blue-500 mb-4"></div>
+        <div class="text-xl font-bold">{{ loadingText || 'กำลังทำงาน...' }}</div>
+    </div>
+
+    <!-- MAIN INTERFACE -->
+    <div id="main-interface" v-show="!isPdfMode">
+
+        <!-- หน้าจอล็อคระบบ -->
+        <div v-if="systemConfig.manualClose && user.role !== 'Administrator' && isLoggedIn" class="maintenance-overlay no-print">
+            <div class="text-center p-8 max-w-lg">
+                <div class="text-8xl mb-6 animate-bounce">🚧</div>
+                <h1 class="text-4xl font-bold text-gray-800 mb-2">ขออภัยในความไม่สะดวก</h1>
+                <h2 class="text-2xl text-orange-600 font-bold mb-6">ระบบปิดปรับปรุงชั่วคราว</h2>
+                <button @click="logout" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-full shadow transition">ออกจากระบบ</button>
+            </div>
+        </div>
+
+        <!-- หน้า Login -->
+        <div v-if="!isLoggedIn" class="min-h-screen flex items-center justify-center login-bg p-4 login-container">
+            <div class="glass-panel p-8 rounded-2xl shadow-2xl w-full max-w-md">
+                <div class="text-center mb-8"><div class="text-6xl mb-2">🚌</div><h1 class="text-3xl font-bold text-blue-900">NYT Check System</h1><p class="text-gray-500">ระบบตรวจสภาพรถ โชคนิตยาทัวร์</p></div>
+                <div v-if="!showRegister">
+                    <form @submit.prevent="login">
+                        <div class="mb-4"><label class="block text-gray-700 text-sm font-bold mb-2">Username</label><input v-model="loginForm.username" type="text" class="w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500" required></div>
+                        <div class="mb-6"><label class="block text-gray-700 text-sm font-bold mb-2">Password</label><input v-model="loginForm.password" type="password" class="w-full px-4 py-3 rounded-lg border focus:outline-none focus:ring-2 focus:ring-blue-500" required></div>
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 w-full rounded-lg transition shadow-lg">เข้าสู่ระบบ</button>
+                    </form>
+                    <div class="mt-6 text-center"><span class="text-gray-600 text-sm">ยังไม่มีบัญชี? </span><button @click="showRegister = true" class="text-blue-600 font-bold hover:underline text-sm">สมัครสมาชิก</button></div>
+                </div>
+                <div v-else>
+                    <h2 class="text-xl font-bold text-blue-800 mb-4 border-b pb-2">📝 สมัครสมาชิกใหม่</h2>
+                    <form @submit.prevent="register">
+                        <div class="grid grid-cols-2 gap-2 mb-2"><div><label class="text-xs font-bold text-gray-600">Username</label><input v-model="regForm.username" type="text" class="w-full p-2 border rounded text-sm" required></div><div><label class="text-xs font-bold text-gray-600">Password</label><input v-model="regForm.password" type="password" class="w-full p-2 border rounded text-sm" required></div></div>
+                        <div class="mb-2"><label class="text-xs font-bold text-gray-600">ชื่อ-นามสกุล</label><input v-model="regForm.fullname" type="text" class="w-full p-2 border rounded text-sm" required></div>
+                        <div class="mb-2"><label class="text-xs font-bold text-gray-600">อีเมลบริษัท</label><input v-model="regForm.email" type="email" class="w-full p-2 border rounded text-sm" required></div>
+                        <div class="grid grid-cols-2 gap-2 mb-2"><div><label class="text-xs font-bold text-gray-600">รหัสพนักงาน</label><input v-model="regForm.empId" type="text" class="w-full p-2 border rounded text-sm" required></div><div><label class="text-xs font-bold text-gray-600">แผนก</label><input v-model="regForm.dept" type="text" class="w-full p-2 border rounded text-sm" required></div></div>
+                        <div class="mb-4"><label class="text-xs font-bold text-gray-600">เบอร์โทรศัพท์</label><input v-model="regForm.phone" type="tel" class="w-full p-2 border rounded text-sm" required></div>
+                        <div class="mb-4 bg-blue-50 p-2 rounded border border-blue-100"><label class="flex items-start gap-2 cursor-pointer"><input type="checkbox" v-model="regForm.pdpa" class="mt-1 w-4 h-4" required><span class="text-xs text-gray-600">ฉันยอมรับเงื่อนไขการใช้งาน</span></label></div>
+                        <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition shadow">ลงทะเบียน</button>
+                        <button type="button" @click="showRegister = false" class="w-full mt-2 text-gray-500 text-sm hover:underline">กลับ</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div v-else class="min-h-screen flex flex-col">
+            <!-- เมนูด้านบน -->
+            <nav class="bg-blue-900 text-white p-4 flex flex-col md:flex-row justify-between items-center shadow-md no-print gap-4">
+                <div class="flex items-center gap-3"><span class="text-3xl">🚌</span><div><div class="font-bold text-xl">NYT CHECK</div><div class="text-xs opacity-80">Choknittayatour</div></div></div>
+                <div class="flex flex-wrap justify-center gap-2 text-sm">
+                    <button @click="setPage('inspection')" :class="btnClass('inspection')">📋 ตรวจรถ</button>
+                    
+                    <template v-if="!isFastModeActive || user.role === 'Administrator'">
+                        <button @click="setPage('passed_vehicles')" :class="btnClass('passed_vehicles')">✅ ผ่านแล้ว</button>
+                        <button @click="setPage('maintenance')" :class="btnClass('maintenance')">📝 ตรวจสอบ</button>
+                        <button @click="setPage('status_check')" :class="btnClass('status_check')">📊 สถานะ</button>
+                        <button @click="setPage('summary')" :class="btnClass('summary')">🖨️ Printing</button>
+                        <button @click="setPage('sent')" :class="btnClass('sent')">🏆 จัดอันดับ</button>
+                    </template>
+                    
+                    <button v-if="user.role === 'Administrator'" @click="setPage('settings')" :class="btnClass('settings')">⚙️ ตั้งค่า</button>
+                    
+                    <button v-if="user.role === 'Administrator' || user.role === 'Admin'" @click="openPdfSettings" class="bg-teal-600 hover:bg-teal-700 text-white px-3 py-1 rounded-lg text-sm shadow flex items-center gap-1 font-bold">
+                        <span>📄</span> จัดหน้า PDF
+                    </button>
+                </div>
+                <div class="flex items-center gap-2 text-sm">
+                    <div class="bg-blue-800 px-3 py-1 rounded-lg flex items-center gap-1 shadow-inner border border-blue-700"><span class="text-yellow-300">⏱️</span><span class="font-mono font-bold">{{ sessionTimeDisplay }}</span></div>
+                    <div class="flex items-center gap-2 bg-blue-800 px-4 py-2 rounded-full">
+                        <span>👤 {{ user.fullname }}</span>
+                        <!-- ปุ่มจัดการระบบ -->
+                        <button v-if="user.role === 'Administrator'" @click="openConfigModal" class="ml-2 bg-gray-700 hover:bg-gray-800 text-white px-2 py-1 rounded text-xs font-bold flex items-center gap-1 shadow">
+                            ⚙️ ระบบ <span v-if="isFastModeActive" class="text-orange-400">⚡</span>
+                        </button>
+                        <button @click="logout" class="ml-2 text-red-300 hover:text-white text-xs underline">ออก</button>
+                    </div>
+                </div>
+            </nav>
+
+            <div v-if="systemConfig.manualClose && user.role === 'Administrator'" class="bg-red-600 text-white text-center py-2 px-4 shadow-md font-bold flex justify-between items-center no-print">
+                <div class="flex items-center gap-2 w-full justify-center"><span class="animate-pulse">🔴</span><span>Maintenance Mode ON (คุณอยู่ในโหมดแอดมิน)</span></div>
+            </div>
+
+            <div class="flex-grow p-2 md:p-8 max-w-7xl mx-auto w-full">
+                
+                <!-- ============================================== -->
+                <!-- 1. หน้าตรวจรถและแก้ไข -->
+                <!-- ============================================== -->
+                <div v-if="currentPage === 'inspection'" class="bg-white shadow-lg my-2 md:my-4 rounded-xl no-print relative p-3 md:p-6 overflow-hidden">
+                     
+                     <div v-if="isInspectionBlocked" class="text-center p-12 bg-red-50 border-2 border-red-300 rounded-xl my-4 shadow-sm">
+                         <div class="text-7xl mb-4">🚧</div>
+                         <h2 class="text-3xl font-bold text-red-800 mb-2">ระบบตรวจรถ ปิดให้บริการชั่วคราว</h2>
+                         <p class="text-gray-700 text-lg mb-4">เวลาเปิดทำการปกติ: {{ systemConfig.startTime }} น. - {{ systemConfig.endTime }} น.</p>
+                         <p v-if="systemConfig.manualClose" class="text-red-600 font-bold bg-white inline-block px-4 py-2 rounded shadow-sm">⚠️ แอดมินกำลังปิดปรับปรุงระบบ</p>
+                     </div>
+                     
+                     <div v-else>
+                         <div v-if="isFastModeActive" class="bg-orange-100 border-l-4 border-orange-500 text-orange-700 p-3 mb-4 rounded shadow-sm flex items-center font-bold">
+                             <span class="mr-2 text-xl">⚡</span> โหมดเร่งด่วนกำลังทำงาน: ปิดเมนูอื่นๆ ชั่วคราวเพื่อความรวดเร็วในการโหลดข้อมูล
+                         </div>
+
+                         <div class="border-2 md:border-4 border-green-600 mb-6 rounded-lg overflow-hidden">
+                            <div class="bg-green-200 text-green-900 text-center font-bold p-2 md:p-3 text-xl md:text-2xl border-b border-green-600">
+                                {{ editMode ? '🛠️ โหมดแก้ไขรายการชำรุด' : 'VEHICLE CHECK LIST' }}
+                            </div>
+                            
+                            <div class="p-3 md:p-4 text-xs md:text-sm flex flex-col md:flex-row justify-between bg-white gap-2">
+                                <div class="flex items-center gap-4"><b class="text-lg md:text-xl text-blue-900">Choknittayatour</b></div>
+                                <div class="flex items-center gap-2 bg-gray-50 px-3 py-1 rounded-lg border">วันออกเอกสาร: <input type="date" v-model="checkDate" class="border-none bg-transparent font-bold text-gray-700 outline-none"></div>
+                            </div>
+
+                            <div v-if="!editMode" class="p-3 md:p-4 bg-gray-100 flex gap-2 border-t search-area">
+                                <input v-model="searchPlate" @keyup.enter="searchCar" placeholder="ระบุทะเบียน..." class="flex-1 p-2 md:p-3 border rounded-lg text-base md:text-lg focus:ring-2 focus:ring-blue-400 outline-none">
+                                <button @click="searchCar" class="bg-blue-600 hover:bg-blue-700 text-white px-4 md:px-8 py-2 md:py-3 rounded-lg text-base md:text-lg font-bold shadow-md transition">ค้นหา</button>
+                            </div>
+                            
+                            <div class="p-3 md:p-4 bg-white border-t">
+                                <div class="grid grid-cols-2 md:grid-cols-7 gap-3 mb-4 text-sm md:text-base">
+                                    <div class="bg-gray-50 p-2 rounded border"><span class="text-gray-500 block text-xs">ทะเบียน</span><b class="text-blue-900">{{ carData.plate || '-' }}</b></div>
+                                    <div class="bg-gray-50 p-2 rounded border"><span class="text-gray-500 block text-xs">ประเภท</span><b>{{ carData.type || '-' }}</b></div>
+                                    <div class="bg-gray-50 p-2 rounded border"><span class="text-gray-500 block text-xs">โรงงาน</span><b class="text-green-700">{{ getCarFactoriesText(carData.plate) || '-' }}</b></div>
+                                    <div class="bg-gray-50 p-2 rounded border"><span class="text-gray-500 block text-xs">พขร.</span><b>{{ carData.driver || '-' }}</b></div>
+                                    <div class="bg-gray-50 p-2 rounded border col-span-2 md:col-span-1"><span class="text-gray-500 block text-xs">สายรถ</span><b class="text-blue-700">{{ carData.route || '-' }}</b></div>
+                                    <div class="bg-blue-50 p-2 rounded border border-blue-200"><span class="text-gray-500 block text-xs">📷 กล้อง</span><b class="text-indigo-700">{{ carData.camera || '-' }}</b></div>
+                                    <div class="bg-blue-50 p-2 rounded border border-blue-200"><span class="text-gray-500 block text-xs">📍 GPS</span><b class="text-indigo-700">{{ carData.gps || '-' }}</b></div>
+                                </div>
+                                
+                                <div class="flex flex-col md:flex-row gap-3 items-stretch">
+                                    <div class="flex items-center justify-between md:justify-start gap-4 bg-yellow-50 p-3 md:p-4 border border-yellow-300 rounded-xl flex-grow shadow-sm">
+                                        <b class="text-blue-900 text-base md:text-lg">เลขไมล์ล่าสุด:</b>
+                                        <input type="number" v-model="carData.mileage" placeholder="ระบุเลขไมล์" class="border-2 border-yellow-400 p-2 rounded-lg w-32 md:w-48 font-bold text-center text-lg focus:ring-2 focus:ring-yellow-500 outline-none">
+                                    </div>
+                                    <div v-if="carData && carData.plate" class="bg-blue-50 p-3 md:p-4 border border-blue-200 rounded-xl font-bold text-blue-900 w-full md:w-auto shadow-sm flex flex-col justify-center">
+                                        <span class="text-gray-500 text-xs font-normal mb-1">ข้อมูลอ้างอิง: {{carData.carTypeAW || '-'}}</span>
+                                        <span class="flex items-center gap-2">🚐 ใช้ใบตรวจกลุ่ม: <span class="bg-blue-600 text-white px-3 py-1 rounded-full text-sm uppercase shadow">{{ detectedLabel }}</span></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div v-if="carData && carData.plate"> 
+                            
+                            <!-- ระบบปรับขนาดตัวอักษรเฉพาะหน้าใบตรวจรถ -->
+                            <div class="bg-gray-100 p-3 mb-4 rounded-lg border border-gray-200 flex items-center justify-between shadow-sm">
+                                <div class="flex items-center gap-3">
+                                    <span class="text-sm font-bold text-gray-700">📏 ปรับขนาดตัวอักษร:</span>
+                                    <div class="flex gap-1">
+                                        <button @click="checklistFontSize > 12 ? checklistFontSize -= 1 : null" class="bg-white border border-gray-300 px-3 py-1 rounded hover:bg-gray-50 font-bold text-lg shadow-sm">A-</button>
+                                        <button @click="checklistFontSize < 30 ? checklistFontSize += 1 : null" class="bg-white border border-gray-300 px-3 py-1 rounded hover:bg-gray-50 font-bold text-lg shadow-sm">A+</button>
+                                        <button @click="checklistFontSize = 16" class="bg-gray-200 text-gray-600 px-3 py-1 rounded hover:bg-gray-300 text-sm font-bold shadow-sm">Reset</button>
+                                    </div>
+                                </div>
+                                <div class="text-xs text-gray-500 font-bold">ขนาดปัจจุบัน: {{ checklistFontSize }}px</div>
+                            </div>
+
+                            <!-- Desktop Checklist -->
+                            <div class="hidden md:block overflow-x-auto">
+                                <table class="check-table mb-8 w-full" :style="{ fontSize: checklistFontSize + 'px' }">
+                                    <thead><tr>
+                                        <th class="w-1/2 text-left pl-4" :style="{ fontSize: (checklistFontSize + 2) + 'px' }">รายการตรวจสอบ</th>
+                                        <th class="w-1/4" :style="{ fontSize: (checklistFontSize + 2) + 'px' }">ผลการตรวจ</th>
+                                        <th class="w-1/4" :style="{ fontSize: (checklistFontSize + 2) + 'px' }">หมายเหตุ</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        <tr><td colspan="3" class="check-cat-header bg-gray-200 text-gray-800 py-3" :style="{ fontSize: (checklistFontSize + 1) + 'px' }">📄 เอกสารประจำรถ</td></tr>
+                                        
+                                        <template v-for="(item, key) in docFields" :key="'doc-'+key">
+                                            <tr>
+                                                <td class="font-bold text-gray-700 pl-6">{{ item.label }}</td>
+                                                <td class="text-center p-2"><div :class="item.isNotDate ? 'doc-none' : getDateClass(carData[item.field])" class="py-2 px-3 rounded w-full text-center shadow-sm border-2 font-bold">{{ item.isNotDate ? (carData[item.field] || '-') : formatDateDisplay(carData[item.field]) }}</div></td>
+                                                <td></td>
+                                            </tr>
+                                        </template>
+                                        
+                                        <tr v-if="!filteredChecklist || filteredChecklist.length === 0"><td colspan="3" class="text-center p-6 text-red-500 font-bold bg-red-50 border border-red-200">❌ ไม่พบหัวข้อการตรวจสำหรับรถกลุ่ม <b>{{ detectedLabel }}</b><br><span class="text-sm font-normal text-gray-600 mt-2 block">กรุณาไปที่เมนู <b>'ตั้งค่า'</b> เลือกแท็บ <b>'{{ detectedLabel }}'</b> และกดเพิ่มข้อมูลครับ</span></td></tr>
+
+                                        <tr v-if="editMode && !hasAbnormalItems"><td colspan="3" class="text-center p-6 text-green-700 font-bold bg-green-50 border-2 border-green-200 rounded-lg shadow-sm" :style="{ fontSize: (checklistFontSize + 4) + 'px' }">✅ รถคันนี้ไม่มีรายการชำรุด (ผ่านการตรวจสอบเรียบร้อยแล้ว)</td></tr>
+
+                                        <template v-for="(cat, catIdx) in filteredChecklist" :key="'cat-'+catIdx">
+                                            <template v-if="shouldShowCategory(cat)">
+                                                <tr><td colspan="3" class="check-cat-header bg-green-100 text-green-800 py-3" :style="{ fontSize: (checklistFontSize + 1) + 'px' }">👉 {{ cat.name }}</td></tr>
+                                                
+                                                <template v-for="(item, itemIdx) in cat.items" :key="'item-'+catIdx+'-'+itemIdx">
+                                                    <!-- ซ่อนข้อที่ผ่านแล้วในโหมดแก้ไข / โชว์เฉพาะข้อที่ต้องซ่อม -->
+                                                    <tr v-if="shouldShowItem(cat.name, item)" :id="'row-' + catIdx + '-' + itemIdx" :class="editMode && isAbnormal(checks[getCheckKey(cat.name, item)]) ? 'bg-red-50 border-l-4 border-red-500 shadow-inner' : 'bg-white hover:bg-gray-50 border-b border-gray-200'">
+                                                        <td class="pl-8 py-3">
+                                                            <div class="font-semibold flex items-center flex-wrap gap-2" :class="editMode && isAbnormal(checks[getCheckKey(cat.name, item)]) ? 'text-red-800 font-bold' : 'text-gray-800'">
+                                                                <span>{{ item.item }}</span>
+                                                                <span v-if="editMode && isAbnormal(checks[getCheckKey(cat.name, item)])" class="bg-red-600 text-white px-2 py-0.5 rounded text-sm animate-pulse shadow-sm">🚨 ต้องแก้ไข</span>
+                                                                <span v-if="item.item.toUpperCase().includes('GPS') && carData.gps" class="text-blue-600 font-bold bg-blue-50 px-2 rounded text-sm">({{ carData.gps }})</span>
+                                                                <span v-if="item.item.includes('กล้อง') && carData.camera" class="text-blue-600 font-bold bg-blue-50 px-2 rounded text-sm">({{ carData.camera }})</span>
+                                                            </div>
+                                                            <div class="mt-1" :class="editMode && isAbnormal(checks[getCheckKey(cat.name, item)]) ? 'text-red-500 font-semibold' : 'text-gray-500'" v-if="item.subItem" :style="{ fontSize: Math.max(12, checklistFontSize - 2) + 'px' }">{{ item.subItem }}</div>
+                                                        </td>
+                                                        <td class="py-3 px-2">
+                                                            <div class="radio-group">
+                                                                <label class="radio-label bg-gray-50 px-4 py-2 rounded-lg border cursor-pointer hover:bg-green-50" :class="checks[getCheckKey(cat.name, item)] === item.opt1 ? 'bg-green-100 border-green-500 ring-1 ring-green-500' : ''"><input type="radio" :name="getCheckKey(cat.name, item)" :value="item.opt1" v-model="checks[getCheckKey(cat.name, item)]" class="w-5 h-5 accent-green-600"> <span class="text-green-700 font-bold">{{ item.opt1 }}</span></label>
+                                                                <label class="radio-label bg-gray-50 px-4 py-2 rounded-lg border cursor-pointer hover:bg-red-50" :class="checks[getCheckKey(cat.name, item)] === item.opt2 ? 'bg-red-100 border-red-500 ring-1 ring-red-500' : ''"><input type="radio" :name="getCheckKey(cat.name, item)" :value="item.opt2" v-model="checks[getCheckKey(cat.name, item)]" class="w-5 h-5 accent-red-600"> <span class="text-red-700 font-bold">{{ item.opt2 }}</span></label>
+                                                                <label v-if="item.opt3" class="radio-label bg-gray-50 px-4 py-2 rounded-lg border cursor-pointer hover:bg-gray-200" :class="checks[getCheckKey(cat.name, item)] === item.opt3 ? 'bg-gray-200 border-gray-500 ring-1 ring-gray-500' : ''"><input type="radio" :name="getCheckKey(cat.name, item)" :value="item.opt3" v-model="checks[getCheckKey(cat.name, item)]" class="w-5 h-5 accent-gray-600"> <span class="text-gray-700 font-bold">{{ item.opt3 }}</span></label>
+                                                            </div>
+                                                            <div v-if="item.hasQty" class="mt-3 text-center"><input type="number" v-model="qty[getCheckKey(cat.name, item)]" placeholder="จำนวน" class="border-2 border-gray-300 rounded-lg p-2 w-32 text-center bg-white focus:ring-2 focus:ring-blue-400"></div>
+                                                            <div v-if="item.hasText" class="mt-3"><input v-model="textInputs[getCheckKey(cat.name, item)]" class="border-2 border-blue-200 rounded-lg p-2 w-full bg-blue-50 text-center text-blue-800 font-bold placeholder-blue-300 focus:ring-2 focus:ring-blue-400" placeholder="ระบุข้อมูลที่นี่"></div>
+                                                        </td>
+                                                        <td class="px-2"><input v-model="notes[getCheckKey(cat.name, item)]" placeholder="เพิ่มหมายเหตุ..." class="w-full border-b-2 border-dashed border-gray-300 bg-transparent p-2 text-gray-700 focus:border-blue-500 outline-none transition-colors" :style="{ fontSize: checklistFontSize + 'px' }"></td>
+                                                    </tr>
+                                                </template>
+                                            </template>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Mobile Checklist -->
+                            <div class="block md:hidden mb-8 space-y-5" :style="{ fontSize: checklistFontSize + 'px' }">
+                                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                                    <div class="bg-gray-800 text-white font-bold p-3 flex items-center gap-2" :style="{ fontSize: (checklistFontSize + 2) + 'px' }"><span>📑</span> เอกสารประจำรถ</div>
+                                    <div class="p-4 space-y-3">
+                                        <template v-for="(item, key) in docFields" :key="'mdoc-'+key">
+                                            <div class="flex justify-between items-center border-b pb-2 last:border-0 last:pb-0">
+                                                <span class="font-bold text-gray-600">{{ item.label }}</span>
+                                                <div :class="item.isNotDate ? 'bg-gray-100 text-gray-800' : getDateClass(carData[item.field]).replace('doc-', 'bg-').replace('expired', 'red-100 text-red-800 border-red-300').replace('ok', 'green-100 text-green-800 border-green-300').replace('warn', 'yellow-100 text-yellow-800 border-yellow-300').replace('danger', 'orange-100 text-orange-800 border-orange-300')" class="py-1 px-3 rounded-lg font-bold shadow-sm border" :style="{ fontSize: Math.max(12, checklistFontSize - 2) + 'px' }">
+                                                    {{ item.isNotDate ? (carData[item.field] || '-') : formatDateDisplay(carData[item.field]) }}
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                <div v-if="!filteredChecklist || filteredChecklist.length === 0" class="text-center p-6 text-red-500 font-bold bg-red-50 border border-red-200 rounded-2xl">
+                                    ❌ ไม่พบหัวข้อการตรวจ<br><span class="text-sm font-normal text-gray-600 mt-2 block">กรุณาเข้าคอมพิวเตอร์เพื่อเพิ่มหัวข้อ</span>
+                                </div>
+                                
+                                <div v-if="editMode && !hasAbnormalItems" class="text-center p-6 text-green-700 font-bold bg-green-50 border border-green-300 rounded-2xl mb-5 shadow-sm">
+                                    ✅ รถคันนี้ไม่มีรายการชำรุด (ผ่านการตรวจสอบเรียบร้อยแล้ว)
+                                </div>
+
+                                <template v-for="(cat, catIdx) in filteredChecklist" :key="'mcat-'+catIdx">
+                                    <div v-if="shouldShowCategory(cat)" class="bg-gray-50 rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-5">
+                                        <div class="bg-green-700 text-white font-bold p-3 flex items-center gap-2 sticky top-0 z-10 shadow-md" :style="{ fontSize: (checklistFontSize + 2) + 'px' }">
+                                            <span class="bg-white text-green-700 rounded-full w-6 h-6 flex items-center justify-center text-sm">{{catIdx + 1}}</span> {{ cat.name }}
+                                        </div>
+                                        
+                                        <div class="p-3 space-y-4">
+                                            <template v-for="(item, itemIdx) in cat.items" :key="'mitem-'+catIdx+'-'+itemIdx">
+                                                <div v-if="shouldShowItem(cat.name, item)" :id="'mob-row-' + catIdx + '-' + itemIdx" class="p-4 rounded-xl shadow-sm border-2 transition-colors duration-200" :class="editMode && isAbnormal(checks[getCheckKey(cat.name, item)]) ? 'border-red-500 bg-red-50' : 'border-gray-200 bg-white'">
+                                                    <div class="font-bold leading-tight mb-2 flex flex-col items-start gap-1" :class="editMode && isAbnormal(checks[getCheckKey(cat.name, item)]) ? 'text-red-800' : 'text-gray-800'">
+                                                        <div>
+                                                            {{ item.item }}
+                                                            <span v-if="editMode && isAbnormal(checks[getCheckKey(cat.name, item)])" class="bg-red-600 text-white px-2 py-0.5 rounded text-xs ml-1 animate-pulse shadow-sm inline-block">🚨 ต้องแก้ไข</span>
+                                                        </div>
+                                                        <span v-if="item.item.toUpperCase().includes('GPS') && carData.gps" class="text-blue-600 font-bold bg-blue-50 px-2 rounded text-xs w-max">({{ carData.gps }})</span>
+                                                        <span v-if="item.item.includes('กล้อง') && carData.camera" class="text-blue-600 font-bold bg-blue-50 px-2 rounded text-xs w-max">({{ carData.camera }})</span>
+                                                    </div>
+                                                    <div class="mb-4 inline-block px-2 py-1 rounded" :class="editMode && isAbnormal(checks[getCheckKey(cat.name, item)]) ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'" v-if="item.subItem" :style="{ fontSize: Math.max(12, checklistFontSize - 4) + 'px' }">{{ item.subItem }}</div>
+
+                                                    <div class="flex flex-wrap gap-2 mb-4">
+                                                        <label class="flex-1 min-w-[30%] py-3 px-1 rounded-xl cursor-pointer border-2 flex flex-col items-center justify-center gap-1 transition-all" :class="checks[getCheckKey(cat.name, item)] === item.opt1 ? 'bg-green-50 border-green-500 text-green-700 shadow-md transform scale-[1.02]' : 'bg-gray-50 border-gray-200 text-gray-500'">
+                                                            <input type="radio" :value="item.opt1" v-model="checks[getCheckKey(cat.name, item)]" class="hidden"><span class="text-2xl leading-none">✅</span><span class="font-bold leading-none text-center mt-1" :style="{ fontSize: Math.max(10, checklistFontSize - 4) + 'px' }">{{ item.opt1 }}</span>
+                                                        </label>
+                                                        <label class="flex-1 min-w-[30%] py-3 px-1 rounded-xl cursor-pointer border-2 flex flex-col items-center justify-center gap-1 transition-all" :class="checks[getCheckKey(cat.name, item)] === item.opt2 ? 'bg-red-50 border-red-500 text-red-700 shadow-md transform scale-[1.02]' : 'bg-gray-50 border-gray-200 text-gray-500'">
+                                                            <input type="radio" :value="item.opt2" v-model="checks[getCheckKey(cat.name, item)]" class="hidden"><span class="text-2xl leading-none">❌</span><span class="font-bold leading-none text-center mt-1" :style="{ fontSize: Math.max(10, checklistFontSize - 4) + 'px' }">{{ item.opt2 }}</span>
+                                                        </label>
+                                                        <label v-if="item.opt3" class="flex-1 min-w-[30%] py-3 px-1 rounded-xl cursor-pointer border-2 flex flex-col items-center justify-center gap-1 transition-all" :class="checks[getCheckKey(cat.name, item)] === item.opt3 ? 'bg-gray-200 border-gray-500 text-gray-700 shadow-md transform scale-[1.02]' : 'bg-gray-50 border-gray-200 text-gray-500'">
+                                                            <input type="radio" :value="item.opt3" v-model="checks[getCheckKey(cat.name, item)]" class="hidden"><span class="text-2xl leading-none">➖</span><span class="font-bold leading-none text-center mt-1" :style="{ fontSize: Math.max(10, checklistFontSize - 4) + 'px' }">{{ item.opt3 }}</span>
+                                                        </label>
+                                                    </div>
+
+                                                    <div class="space-y-2" v-if="item.hasQty || item.hasText || checks[getCheckKey(cat.name, item)] === item.opt2">
+                                                        <div v-if="item.hasQty" class="flex items-center gap-2 bg-blue-50 p-2 rounded-lg border border-blue-100">
+                                                            <span class="font-bold text-blue-800 w-16" :style="{ fontSize: Math.max(12, checklistFontSize - 4) + 'px' }">จำนวน:</span>
+                                                            <input type="number" v-model="qty[getCheckKey(cat.name, item)]" placeholder="ระบุจำนวน" class="flex-1 border-none bg-white p-2 rounded-md focus:ring-2 focus:ring-blue-400 text-center font-bold shadow-inner" :style="{ fontSize: checklistFontSize + 'px' }">
+                                                        </div>
+                                                        <div v-if="item.hasText" class="flex items-center gap-2 bg-blue-50 p-2 rounded-lg border border-blue-100">
+                                                            <span class="font-bold text-blue-800 w-16" :style="{ fontSize: Math.max(12, checklistFontSize - 4) + 'px' }">ข้อมูล:</span>
+                                                            <input type="text" v-model="textInputs[getCheckKey(cat.name, item)]" placeholder="ระบุข้อความ" class="flex-1 border-none bg-white p-2 rounded-md focus:ring-2 focus:ring-blue-400 font-bold shadow-inner" :style="{ fontSize: checklistFontSize + 'px' }">
+                                                        </div>
+                                                        <div class="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200 mt-2">
+                                                            <span class="font-bold text-gray-500 w-16" :style="{ fontSize: Math.max(12, checklistFontSize - 4) + 'px' }">หมายเหตุ:</span>
+                                                            <input type="text" v-model="notes[getCheckKey(cat.name, item)]" placeholder="พิมพ์อธิบาย..." class="flex-1 border-none bg-transparent p-1 focus:outline-none border-b border-gray-300 rounded-none" :style="{ fontSize: Math.max(12, checklistFontSize - 2) + 'px' }">
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <div class="mb-6 bg-white p-4 md:p-6 rounded-xl border border-gray-200 shadow-sm">
+                                <label class="font-bold text-lg text-blue-900 block mb-2">💬 ข้อเสนอแนะเพิ่มเติม (ถ้ามี):</label>
+                                <textarea v-model="suggestion" rows="3" placeholder="ระบุข้อเสนอแนะสำหรับการซ่อมบำรุง..." class="w-full border-2 border-gray-200 rounded-xl p-4 text-base bg-blue-50 focus:bg-white focus:ring-2 focus:ring-blue-400 transition-colors outline-none"></textarea>
+                            </div>
+
+                            <div class="border-4 border-green-600 p-6 md:p-8 mt-6 bg-white rounded-2xl shadow-md flex flex-col md:flex-row justify-center gap-8 text-center">
+                                <div class="bg-gray-50 p-6 rounded-xl border border-gray-200 w-full md:w-1/2">
+                                    <div class="text-lg font-bold mb-6 text-gray-700">ผู้ตรวจสอบ (Inspector)</div>
+                                    <div class="signature-box mb-2 text-2xl text-blue-800">{{ user.fullname }}</div>
+                                    <div class="text-sm text-gray-400 mt-2">ลงชื่ออัตโนมัติจากระบบ</div>
+                                </div>
+                                <div class="bg-green-50 p-6 rounded-xl border border-green-200 w-full md:w-1/2">
+                                    <div class="text-lg font-bold mb-6 text-green-800">พนักงานขับรถ (Driver)</div>
+                                    <label class="flex items-center justify-center gap-3 text-sm md:text-base text-green-900 mb-6 cursor-pointer bg-white px-6 py-3 rounded-full border-2 border-green-500 shadow-sm hover:bg-green-100 transition-colors w-max mx-auto">
+                                        <input type="checkbox" v-model="driverAck" class="w-6 h-6 text-green-600 rounded">
+                                        <span class="font-bold">ข้าพเจ้าได้นำรถเข้าตรวจจริง</span>
+                                    </label>
+                                    <div class="signature-box mb-2 text-xl">{{ carData.driver || '...........................' }}</div>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col md:flex-row justify-end mt-8 gap-4">
+                                <button v-if="editMode" @click="cancelEdit" class="w-full md:w-auto bg-gray-500 hover:bg-gray-600 text-white px-8 py-4 rounded-xl font-bold text-xl shadow-lg transition">ยกเลิกแก้ไข</button>
+                                <button @click="saveInspection" class="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white px-12 py-4 rounded-xl font-bold text-xl shadow-lg transform hover:scale-105 transition flex items-center justify-center gap-2">
+                                    <span>💾</span> {{ editMode ? 'ยืนยันการแก้ไขเพื่อขออนุมัติ' : 'บันทึกข้อมูลการตรวจ' }}
+                                </button>
+                            </div>
+                        </div>
+                     </div>
+                </div>
+
+                <!-- ============================================== -->
+                <!-- 2. แท็บใหม่: ✅ ผ่านแล้ว -->
+                <!-- ============================================== -->
+                <div v-if="currentPage === 'passed_vehicles'" class="no-print">
+                    <h2 class="text-3xl font-bold mb-6 text-green-700">✅ รถที่ผ่านการตรวจสอบแล้ว</h2>
+                    <div class="bg-white p-6 rounded-lg shadow-md border-t-4 border-green-500 mb-6">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div><label class="text-xs text-gray-500 block">เลือกวัน (ตัวเลือก)</label><input type="date" v-model="passedFilterExactDate" class="border p-2 rounded w-full outline-none focus:ring-2 focus:ring-green-400"></div>
+                            <div><label class="text-xs text-gray-500 block">เลือกเดือน</label><select v-model="passedFilterMonth" class="border p-2 rounded w-full outline-none focus:ring-2 focus:ring-green-400" :disabled="passedFilterExactDate !== ''"><option value="01">มกราคม</option><option value="02">กุมภาพันธ์</option><option value="03">มีนาคม</option><option value="04">เมษายน</option><option value="05">พฤษภาคม</option><option value="06">มิถุนายน</option><option value="07">กรกฎาคม</option><option value="08">สิงหาคม</option><option value="09">กันยายน</option><option value="10">ตุลาคม</option><option value="11">พฤศจิกายน</option><option value="12">ธันวาคม</option></select></div>
+                            <div><label class="text-xs text-gray-500 block">เลือกปี</label><select v-model="passedFilterYear" class="border p-2 rounded w-full outline-none focus:ring-2 focus:ring-green-400" :disabled="passedFilterExactDate !== ''"><option value="2025">2025</option><option value="2026">2026</option></select></div>
+                            <div><label class="text-xs text-gray-500 block">โรงงาน</label><select v-model="passedFilterFactory" class="border p-2 rounded w-full outline-none focus:ring-2 focus:ring-green-400"><option value="">-- ทุกโรงงาน --</option><option v-for="fac in factoryList" :value="fac">{{ fac }}</option></select></div>
+                        </div>
+                    </div>
+                    <div class="bg-white shadow rounded-lg overflow-hidden">
+                        <div class="bg-green-50 p-3 font-bold border-b border-green-200 text-green-800">📋 รายการรถที่ผ่าน ({{ filteredPassedList.length }} คัน)</div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left">
+                                <thead class="bg-gray-100 text-gray-600 text-sm"><tr><th class="p-4">วันที่</th><th class="p-4">ทะเบียน</th><th class="p-4">โรงงาน</th><th class="p-4">ผู้ตรวจ</th><th class="p-4 text-center">สถานะ</th></tr></thead>
+                                <tbody class="text-sm">
+                                    <template v-for="(item, index) in filteredPassedList" :key="index">
+                                        <tr class="border-b hover:bg-gray-50"><td class="p-4">{{ formatDateDisplay(item.date) }}</td><td class="p-4 font-bold text-blue-900">{{ item.plate }}</td><td class="p-4">{{ item.factory }}</td><td class="p-4">{{ item.inspector }}</td><td class="p-4 text-center"><span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold border border-green-300">ผ่าน</span></td></tr>
+                                    </template>
+                                    <tr v-if="filteredPassedList.length === 0"><td colspan="5" class="text-center py-10 text-gray-400">ไม่พบรถที่ผ่านการตรวจสอบตามเงื่อนไขที่เลือก</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================== -->
+                <!-- 3. หน้าตรวจสอบและแก้ไขผล -->
+                <!-- ============================================== -->
+                <div v-if="currentPage === 'maintenance'" class="no-print">
+                    <h2 class="text-3xl font-bold mb-6 text-blue-900">📝 ตรวจสอบและแก้ไขผล</h2>
+                    <div class="bg-white p-4 rounded shadow mb-6">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div><label class="text-xs text-gray-500 block">จากวันที่</label><input type="date" v-model="filters.start" class="border p-2 rounded w-full outline-none focus:ring-2 focus:ring-blue-400"></div>
+                            <div><label class="text-xs text-gray-500 block">ถึงวันที่</label><input type="date" v-model="filters.end" class="border p-2 rounded w-full outline-none focus:ring-2 focus:ring-blue-400"></div>
+                            <div class="md:col-span-1"><label class="text-xs text-gray-500 block">โรงงาน</label><select v-model="filters.factory" class="border p-2 rounded w-full outline-none focus:ring-2 focus:ring-blue-400"><option value="">-- แสดงทุกโรงงาน --</option><option v-for="fac in factoryList" :value="fac">{{ fac }}</option></select></div>
+                            <div class="flex gap-2"><input v-model="filters.searchPlate" placeholder="ทะเบียน..." class="border p-2 rounded w-full outline-none focus:ring-2 focus:ring-blue-400"><button @click="applyFilters" class="bg-blue-600 text-white px-4 py-2 rounded font-bold shadow">🔍 ค้นหา</button></div>
+                        </div>
+                    </div>
+                    
+                    <div class="flex border-b-2 border-gray-200 mb-4 overflow-x-auto">
+                        <button @click="activeTab='all'" :class="['tab-btn whitespace-nowrap', activeTab==='all' ? 'active text-blue-600' : '']">📋 ทั้งหมด ({{ (filteredInspectionList || []).length }})</button>
+                        <button @click="activeTab='fix'" :class="['tab-btn whitespace-nowrap', activeTab==='fix' ? 'active text-red-600 border-red-600' : '']">🛠️ ต้องแก้ไข ({{ (fixList || []).length }})</button>
+                        <button @click="activeTab='overdue'" :class="['tab-btn whitespace-nowrap', activeTab==='overdue' ? 'active text-red-800' : '']">🚨 เกิน 7 วัน ({{ (overdueList || []).length }})</button>
+                        <button @click="activeTab='pending'" :class="['tab-btn whitespace-nowrap', activeTab==='pending' ? 'active text-orange-600' : '']">⏳ รออนุมัติ ({{ (pendingList || []).length }})</button>
+                    </div>
+                    
+                    <div class="bg-white shadow rounded-lg overflow-hidden">
+                        <table class="w-full text-left"><thead class="bg-gray-100 text-gray-600 text-sm"><tr><th class="py-3 px-4">โรงงาน</th><th class="py-3 px-4">ทะเบียน/วันที่</th><th class="py-3 px-4">รายละเอียด</th><th class="py-3 px-4 text-center">จัดการ</th></tr></thead>
+                        <tbody class="text-gray-600 text-sm">
+                            <template v-for="item in paginatedList" :key="item.row">
+                                <tr class="border-b hover:bg-gray-50">
+                                    <td class="py-3 px-4 align-top font-bold">{{ item.factory }}</td>
+                                    <td class="py-3 px-4 align-top"><div class="text-blue-800 font-bold">{{ item.plate }}</div><div class="text-xs">{{ formatDateDisplay(item.date) }}</div></td>
+                                    <td class="py-3 px-4 align-top"><ul class="list-disc pl-4 text-red-600 font-bold"><li v-if="getFailedItems(item.checks).length === 0 && item.status === 'ผ่าน'" class="text-green-600">✅ ปกติทุกรายการ</li><li v-for="fail in getFailedItems(item.checks)">{{ fail }}</li></ul></td>
+                                    <td class="py-3 px-4 text-center align-top">
+                                        <div class="flex gap-1 mb-1 justify-center"><button @click="openEvidenceModal(item, 'upload')" class="bg-blue-600 text-white px-2 py-1 rounded shadow hover:bg-blue-700 text-xs font-bold w-1/2">➕ แนบ</button><button @click="openEvidenceModal(item, 'view')" class="bg-purple-600 text-white px-2 py-1 rounded shadow hover:bg-purple-700 text-xs font-bold w-1/2">👁️ ดู</button></div>
+                                        <div v-if="item.status === 'รอตรวจสอบ' && (user.role === 'Admin' || user.role === 'Administrator')"><button @click="adminApprove(item)" class="bg-green-500 text-white px-3 py-1 rounded shadow hover:bg-green-600 text-xs font-bold mb-1 w-full">✅ อนุมัติ</button><button @click="startEdit(item)" class="bg-gray-400 text-white px-3 py-1 rounded shadow hover:bg-gray-500 text-xs w-full">ดู/แก้</button></div>
+                                        <div v-else><button @click="startEdit(item)" class="bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600 font-bold text-sm w-full">{{ item.status === 'ผ่าน' ? 'ดู/แก้ไข' : (item.status === 'รอตรวจสอบ' ? 'แก้ไขซ้ำ' : 'แก้ไข') }}</button><div v-if="item.status === 'รอตรวจสอบ'" class="text-orange-500 text-xs mt-1 font-bold">รอแอดมิน</div></div>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr v-if="paginatedList.length === 0"><td colspan="4" class="text-center py-8 text-gray-500">ไม่พบข้อมูลในหมวดหมู่นี้</td></tr>
+                        </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ============================================== -->
+                <!-- 4. หน้าติดตามสถานะ -->
+                <!-- ============================================== -->
+                <div v-if="currentPage === 'status_check'" class="no-print">
+                    <h2 class="text-2xl font-bold mb-6 text-indigo-900">📊 ติดตามสถานะ</h2>
+                    <div class="bg-white p-4 rounded shadow mb-6">
+                        <div class="flex gap-4 items-end mb-4">
+                            <div><label class="text-xs text-gray-500 block">เลือกเดือน/ปี</label><div class="flex gap-2"><select v-model="selectedStatusMonth" class="border p-2 rounded w-full outline-none focus:ring-2 focus:ring-indigo-400"><option value="01">มกราคม</option><option value="02">กุมภาพันธ์</option><option value="03">มีนาคม</option><option value="04">เมษายน</option><option value="05">พฤษภาคม</option><option value="06">มิถุนายน</option><option value="07">กรกฎาคม</option><option value="08">สิงหาคม</option><option value="09">กันยายน</option><option value="10">ตุลาคม</option><option value="11">พฤศจิกายน</option><option value="12">ธันวาคม</option></select><select v-model="selectedStatusYear" class="border p-2 rounded w-32 outline-none focus:ring-2 focus:ring-indigo-400"><option value="2025">2025</option><option value="2026">2026</option></select></div></div>
+                            <button @click="trackFiltersApplied=true" class="bg-indigo-600 text-white px-6 py-2 rounded h-10 hover:bg-indigo-700 font-bold shadow transition">🔍 ดูข้อมูล</button>
+                        </div>
+                        <div class="border-t pt-4"><label class="text-sm font-bold text-gray-700 mb-2 block">เลือกโรงงาน (Checkbox)</label><div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 max-h-40 overflow-y-auto p-2 border rounded bg-gray-50"><label v-for="fac in factoryList" :key="fac" class="flex items-center space-x-2 cursor-pointer hover:bg-gray-200 p-1 rounded"><input type="checkbox" :value="fac" v-model="selectedFactories" class="w-4 h-4 text-indigo-600"><span class="text-sm text-gray-700">{{ fac }}</span></label></div></div>
+                    </div>
+                    
+                    <div class="bg-white p-6 rounded-xl shadow-md mb-6 border-l-4 border-blue-500 flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div class="flex-1 w-full">
+                            <h3 class="text-lg font-bold text-gray-700 mb-2">📈 ภาพรวมการตรวจสภาพรถ (ทั้งหมด {{ overallProgress.total }} คัน)</h3>
+                            <div class="w-full bg-gray-200 rounded-full h-5 mb-2 shadow-inner overflow-hidden">
+                              <div class="bg-green-500 h-5 rounded-full flex items-center justify-center text-xs text-white font-bold transition-all duration-500" :style="{ width: overallProgress.percentChecked + '%' }">
+                                  {{ overallProgress.percentChecked > 5 ? overallProgress.percentChecked + '%' : '' }}
+                              </div>
+                            </div>
+                            <div class="flex justify-between text-sm font-bold"><span class="text-green-600">✅ ตรวจแล้ว: {{ overallProgress.checked }} คัน</span><span class="text-red-500">⏳ คงเหลือ: {{ overallProgress.remainingCount }} คัน ({{ overallProgress.percentRemaining }}%)</span></div>
+                        </div>
+                        <div class="flex-1 w-full md:w-1/3 bg-orange-50 p-4 rounded-lg border border-orange-200">
+                            <div class="text-sm font-bold text-orange-800 mb-1">🏢 โรงงานที่ยังตรวจไม่ครบ:</div>
+                            <div class="text-xs text-gray-600 truncate whitespace-normal leading-relaxed">
+                                <span v-if="overallProgress.remainingFacs.length > 0">{{ overallProgress.remainingFacs.join(', ') }}</span>
+                                <span v-else class="text-green-600 font-bold text-sm">🎉 ตรวจครบทุกโรงงานแล้ว!</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-8">
+                        <template v-for="(stat, name) in filteredFactoryStats" :key="name">
+                            <div class="factory-card border-l-8" :class="getFactoryStatusColor(stat)" @click="openFactoryDetail(name)">
+                                <div class="text-gray-500 font-bold text-sm">{{ name }}</div>
+                                <div class="text-3xl font-bold text-blue-900 mt-2">{{ stat.count }} คัน</div>
+                                <div class="text-xs text-gray-500 mt-1">ตรวจแล้ว: <b>{{ stat.checked }}</b> / {{ stat.count }}</div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- ============================================== -->
+                <!-- 5. หน้า Printing และ Save PDF -->
+                <!-- ============================================== -->
+                <div v-if="currentPage === 'summary'" class="no-print">
+                    <h2 class="text-3xl font-bold mb-6 text-blue-900">🖨️ ระบบสั่งพิมพ์และบันทึก PDF</h2>
+                    
+                    <!-- ส่วนตั้งค่าใบปะหน้า -->
+                    <div class="bg-white p-6 rounded-lg shadow-md border-t-4 border-indigo-500 mb-6">
+                        <h3 class="font-bold text-lg mb-4 text-indigo-800 flex items-center gap-2"><span>📑</span> ตั้งค่าข้อมูลใบปะหน้า</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                            <div><label class="text-xs text-gray-500 block">เรียน (ถึงใคร):</label><input type="text" v-model="coverPage.to" placeholder="เรียน..." class="border p-2 rounded w-full border-indigo-200 outline-none focus:ring-2 focus:ring-indigo-400"></div>
+                            <div>
+                                <label class="text-xs text-gray-500 block">ประจำเดือน:</label>
+                                <select v-model="coverPage.month" class="border p-2 rounded w-full border-indigo-200 outline-none focus:ring-2 focus:ring-indigo-400">
+                                    <option value="01">มกราคม</option><option value="02">กุมภาพันธ์</option><option value="03">มีนาคม</option><option value="04">เมษายน</option>
+                                    <option value="05">พฤษภาคม</option><option value="06">มิถุนายน</option><option value="07">กรกฎาคม</option><option value="08">สิงหาคม</option>
+                                    <option value="09">กันยายน</option><option value="10">ตุลาคม</option><option value="11">พฤศจิกายน</option><option value="12">ธันวาคม</option>
+                                </select>
+                            </div>
+                            <div><label class="text-xs text-gray-500 block">ปี:</label><select v-model="coverPage.year" class="border p-2 rounded w-full border-indigo-200 outline-none focus:ring-2 focus:ring-indigo-400"><option value="2025">2025</option><option value="2026">2026</option></select></div>
+                            <div><label class="text-xs text-gray-500 block">วันที่จัดทำเอกสาร:</label><input type="date" v-model="coverPage.docDate" class="border p-2 rounded w-full border-indigo-200 outline-none focus:ring-2 focus:ring-indigo-400"></div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 border-t border-indigo-100 pt-4">
+                            <div><label class="text-xs text-gray-500 block">ผู้จัดทำ:</label><input type="text" v-model="coverPage.maker" placeholder="พิมพ์ชื่อผู้จัดทำ..." class="border p-2 rounded w-full border-indigo-200 outline-none focus:ring-2 focus:ring-indigo-400"></div>
+                            <div><label class="text-xs text-gray-500 block">ตรวจสอบโดย:</label><input type="text" v-model="coverPage.checker" placeholder="พิมพ์ชื่อผู้ตรวจสอบ..." class="border p-2 rounded w-full border-indigo-200 outline-none focus:ring-2 focus:ring-indigo-400"></div>
+                            <div><label class="text-xs text-gray-500 block">เจ้าหน้าที่ความปลอดภัย (จป.):</label><input type="text" v-model="coverPage.safety" placeholder="พิมพ์ชื่อ จป...." class="border p-2 rounded w-full border-indigo-200 outline-none focus:ring-2 focus:ring-indigo-400"></div>
+                            <div><label class="text-xs text-gray-500 block">ผู้จัดการ:</label><input type="text" v-model="coverPage.manager" placeholder="พิมพ์ชื่อผู้จัดการ..." class="border p-2 rounded w-full border-indigo-200 outline-none focus:ring-2 focus:ring-indigo-400"></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white p-6 rounded-lg shadow-md border-t-4 border-blue-500">
+                            <h3 class="font-bold text-lg mb-4 text-gray-700">🔍 ค้นหาด้วยทะเบียนรถ (ดึงล่าสุด)</h3>
+                            
+                            <div class="flex gap-2">
+                                <input v-model="summarySearchPlate" @keyup.enter="addToQueue" placeholder="ระบุทะเบียนรถ" class="flex-1 p-3 border rounded focus:ring-2 focus:ring-blue-400 outline-none">
+                                <button @click="addToQueue" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded font-bold shadow transition">ดึงข้อมูล</button>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-lg shadow-md border-t-4 border-green-500">
+                            <h3 class="font-bold text-lg mb-4 text-gray-700">🏭 ดึงประวัติเหมาโรงงาน (เฉพาะรถผ่าน)</h3>
+                            <div class="flex gap-2 mb-2">
+                                <input type="date" v-model="printFilterStart" class="w-full p-2 border rounded text-xs outline-none focus:ring-2 focus:ring-green-400"><input type="date" v-model="printFilterEnd" class="w-full p-2 border rounded text-xs outline-none focus:ring-2 focus:ring-green-400">
+                            </div>
+                            <div class="flex gap-2">
+                                <select v-model="selectedPrintFactory" class="flex-1 p-2 border rounded outline-none focus:ring-2 focus:ring-green-400">
+                                    <option value="">-- เลือกโรงงาน --</option><option v-for="fac in factoryList" :value="fac">{{ fac }}</option>
+                                </select>
+                                <button @click="addFactoryToQueue" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded font-bold shadow transition">เพิ่มเข้าคิว</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <div class="flex justify-between items-center mb-4 border-b pb-2">
+                            <h3 class="font-bold text-xl text-gray-800">📋 คิวเตรียมพิมพ์ ({{ printQueue.length }} คัน)</h3>
+                            <button @click="printQueue = []" v-if="printQueue.length > 0" class="text-red-500 hover:text-red-700 text-sm font-bold">🗑️ ล้างคิวทั้งหมด</button>
+                        </div>
+                        
+                        <div v-if="printQueue.length === 0" class="text-center py-10 text-gray-400"><div class="text-5xl mb-3">📭</div><p>ยังไม่มีรายการในคิว</p></div>
+
+                        <div v-else class="space-y-3 mb-6">
+                            <!-- แจ้งเตือนสีแดงถ้ารถไม่ผ่านและติดอยู่ในคิว -->
+                            <template v-for="(item, idx) in printQueue" :key="idx">
+                                <div class="flex justify-between items-center p-4 border rounded-lg transition" :class="item.status === 'ไม่ผ่าน' || item.status === 'รอตรวจสอบ' || item.status === 'รออนุมัติ' ? 'bg-red-50 border-red-300' : 'bg-gray-50 hover:bg-gray-100'">
+                                    <div>
+                                        <div class="font-bold text-lg" :class="item.status === 'ไม่ผ่าน' || item.status === 'รอตรวจสอบ' || item.status === 'รออนุมัติ' ? 'text-red-800' : 'text-blue-900'">
+                                            {{ item.plate }} 
+                                            <span class="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded ml-2">{{ detectVehicleType(item.carTypeAW || item.type) }}</span>
+                                            <span v-if="item.status === 'ไม่ผ่าน' || item.status === 'รอตรวจสอบ' || item.status === 'รออนุมัติ'" class="text-xs bg-red-600 text-white px-2 py-1 rounded ml-2 shadow-sm animate-pulse">❌ {{item.status}} (ห้ามพิมพ์)</span>
+                                        </div>
+                                        <div class="text-sm text-gray-500 mt-1">วันที่ตรวจ: {{ formatDateDisplay(item.date) }}</div>
+                                    </div>
+                                    <div class="flex items-center gap-4">
+                                        <div v-if="getCarFactories(item.plate).length > 1" class="flex flex-col text-right">
+                                            <label class="text-[10px] text-gray-500 font-bold mb-1">หัวกระดาษแสดงชื่อ:</label>
+                                            <select v-model="item.factory" class="border border-blue-300 p-1 rounded bg-white text-sm text-blue-900 focus:ring-blue-500 font-bold cursor-pointer outline-none">
+                                                <option v-for="fac in getCarFactories(item.plate)" :value="fac">โรงงาน {{ fac }}</option>
+                                            </select>
+                                        </div>
+                                        <div v-else class="text-sm text-gray-600 bg-gray-200 px-3 py-1 rounded font-bold">🏭 {{ item.factory }}</div>
+                                        <button @click="printQueue.splice(idx, 1)" class="text-red-500 hover:bg-red-100 p-2 rounded-full transition">❌</button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- ปุ่มปริ้นท์และบันทึก PDF -->
+                        <div v-if="printQueue.length > 0" class="flex justify-between items-center border-t pt-4 flex-wrap gap-4">
+                            <div class="flex gap-2">
+                                <button @click="triggerPrint(true)" class="bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-3 rounded-lg font-bold shadow-lg transition flex items-center gap-2"><span>🖨️ ปริ้น + ใบปะหน้า</span></button>
+                                <button @click="triggerPDF(true)" class="bg-red-500 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-bold shadow-lg transition flex items-center gap-2"><span>📄 PDF + ใบปะหน้า</span></button>
+                            </div>
+                            <div class="flex gap-2">
+                                <button @click="triggerPrint(false)" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-bold shadow-lg transition flex items-center gap-2 text-sm"><span>🖨️ ปริ้นเฉพาะใบตรวจ</span></button>
+                                <button @click="triggerPDF(false)" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded-lg font-bold shadow-lg transition flex items-center gap-2 text-sm"><span>📄 PDF เฉพาะใบตรวจ</span></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ============================================== -->
+                <!-- 6. หน้าจัดอันดับ (Sent) -->
+                <!-- ============================================== -->
+                <div v-if="currentPage === 'sent'" class="no-print">
+                    <h2 class="text-2xl font-bold mb-6 text-center text-yellow-600">🏆 อันดับผู้ตรวจสภาพรถ</h2>
+                    <div class="flex justify-center gap-4 mb-8 bg-white p-4 rounded shadow-sm max-w-lg mx-auto">
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm font-bold text-gray-600">เดือน:</label>
+                            <select v-model="rankMonth" class="border p-2 rounded outline-none focus:ring-2">
+                                <option value="01">มกราคม</option><option value="02">กุมภาพันธ์</option><option value="03">มีนาคม</option><option value="04">เมษายน</option>
+                                <option value="05">พฤษภาคม</option><option value="06">มิถุนายน</option><option value="07">กรกฎาคม</option><option value="08">สิงหาคม</option>
+                                <option value="09">กันยายน</option><option value="10">ตุลาคม</option><option value="11">พฤศจิกายน</option><option value="12">ธันวาคม</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm font-bold text-gray-600">ปี:</label>
+                            <select v-model="rankYear" class="border p-2 rounded outline-none focus:ring-2">
+                                <option value="2025">2025</option><option value="2026">2026</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-center gap-8 mb-12 items-end" v-if="inspectorRanking && inspectorRanking.length > 0">
+                        <div v-if="inspectorRanking[1]" class="rank-card rank-2 w-1/4 h-48 flex flex-col justify-end"><div class="rank-num">2</div><div class="text-5xl mb-2">🥈</div><div class="font-bold text-xl text-gray-600">{{ inspectorRanking[1].name }}</div><div class="text-lg text-gray-500">{{ inspectorRanking[1].count }} คัน</div><div class="text-sm text-gray-400 mt-1">⏱️ {{ formatDuration(inspectorRanking[1].time) }}</div></div>
+                        <div v-if="inspectorRanking[0]" class="rank-card rank-1 w-1/3 h-64 flex flex-col justify-center"><div class="rank-num">1</div><div class="text-6xl mb-4">🥇</div><div class="font-bold text-2xl text-yellow-800">{{ inspectorRanking[0].name }}</div><div class="text-xl text-yellow-700">{{ inspectorRanking[0].count }} คัน</div><div class="text-base text-yellow-600 mt-1 font-bold">⏱️ {{ formatDuration(inspectorRanking[0].time) }}</div></div>
+                        <div v-if="inspectorRanking[2]" class="rank-card rank-3 w-1/4 h-48 flex flex-col justify-end"><div class="rank-num">3</div><div class="text-5xl mb-2">🥉</div><div class="font-bold text-xl text-yellow-900">{{ inspectorRanking[2].name }}</div><div class="text-lg text-yellow-800">{{ inspectorRanking[2].count }} คัน</div><div class="text-sm text-gray-400 mt-1">⏱️ {{ formatDuration(inspectorRanking[2].time) }}</div></div>
+                    </div>
+                    <div v-else class="text-center text-gray-400 text-lg py-10">ไม่พบข้อมูลการตรวจในเดือนนี้</div>
+                    
+                    <div class="bg-white rounded-lg shadow overflow-hidden max-w-2xl mx-auto" v-if="inspectorRanking && inspectorRanking.length > 3">
+                        <table class="w-full text-left">
+                            <thead class="bg-gray-100 text-gray-600 uppercase text-sm"><tr><th class="p-4 w-20 text-center">อันดับ</th><th class="p-4">ชื่อผู้ตรวจ</th><th class="p-4 text-right">จำนวนที่ตรวจ (คัน)</th><th class="p-4 text-right">ระยะเวลาสะสม</th></tr></thead>
+                            <tbody>
+                                <tr v-for="(insp, index) in inspectorRanking.slice(3)" :key="index" class="border-b hover:bg-gray-50">
+                                    <td class="p-4 text-center font-bold text-gray-400">{{ index + 4 }}</td>
+                                    <td class="p-4">{{ insp.name }}</td>
+                                    <td class="p-4 text-right font-bold text-blue-600">{{ insp.count }}</td>
+                                    <td class="p-4 text-right text-gray-500">{{ formatDuration(insp.time) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ============================================== -->
+                <!-- 7. หน้าตั้งค่าหัวข้อตรวจ (Settings) -->
+                <!-- ============================================== -->
+                <div v-if="currentPage === 'settings'" class="no-print">
+                    <div class="bg-green-200 text-green-900 text-center font-bold p-4 text-2xl border border-green-600 mb-6 rounded-t">⚙️ จัดการหัวข้อการตรวจเช็ค (แยกตามชีตข้อมูล)</div>
+                    
+                    <div class="flex border-b mb-6 overflow-x-auto">
+                         <div @click="settingFilter = 'Common'" :class="['setting-tab', settingFilter==='Common' ? 'active text-gray-700' : '']">🏠 ส่วนกลาง (Common)</div>
+                         <div @click="settingFilter = 'Van'" :class="['setting-tab', settingFilter==='Van' ? 'active text-blue-600' : '']">🚐 รถตู้ (Van)</div>
+                         <div @click="settingFilter = 'Bus'" :class="['setting-tab', settingFilter==='Bus' ? 'active text-purple-600' : '']">🚌 รถบัส (Bus)</div>
+                         <div @click="settingFilter = 'Busซันลอง'" :class="['setting-tab', settingFilter==='Busซันลอง' ? 'active text-orange-600' : '']">🚌 รถบัส (Busซันลอง)</div>
+                         <div @click="settingFilter = 'Car'" :class="['setting-tab', settingFilter==='Car' ? 'active text-green-600' : '']">🚗 รถเก๋ง (Car)</div>
+                         <div @click="settingFilter = 'EV'" :class="['setting-tab', settingFilter==='EV' ? 'active text-teal-600' : '']">⚡ รถไฟฟ้า (EV)</div>
+                    </div>
+                    
+                    <div class="bg-blue-50 p-6 border rounded mb-8 shadow-sm">
+                        <h3 class="font-bold text-blue-900 mb-4 border-b border-blue-200 pb-2 flex justify-between">
+                            <span>{{ editSettingMode ? '✏️ แก้ไขรายการ (ลงชีต ตั้งค่า_' + settingFilter + ')' : '➕ เพิ่มรายการ (ลงชีต ตั้งค่า_' + settingFilter + ')' }}</span>
+                            <button v-if="editSettingMode" @click="cancelEditSetting" class="text-xs text-red-500 underline">ยกเลิกแก้ไข</button>
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div><label class="text-sm font-bold text-gray-700">หมวดหมู่ *</label><input v-model="newItem.category" class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-400 outline-none" placeholder="ระบุหมวดหมู่หลัก"></div>
+                            <div><label class="text-sm font-bold text-gray-700">รายการหลัก *</label><input v-model="newItem.item" class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-400 outline-none"></div>
+                            <div><label class="text-sm font-bold text-gray-700">หัวข้อย่อย</label><input v-model="newItem.subItem" class="border p-2 rounded w-full focus:ring-2 focus:ring-blue-400 outline-none"></div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end mb-4">
+                            <div><label class="text-sm font-bold text-green-700">ตัวเลือก 1 (ปกติ)</label><input v-model="newItem.opt1" class="border p-2 rounded w-full text-green-700 font-bold focus:ring-2 focus:ring-green-300 outline-none"></div>
+                            <div><label class="text-sm font-bold text-red-700">ตัวเลือก 2 (ผิดปกติ)</label><input v-model="newItem.opt2" class="border p-2 rounded w-full text-red-700 font-bold focus:ring-2 focus:ring-red-300 outline-none"></div>
+                            <div><label class="text-sm font-bold text-gray-700">ตัวเลือก 3 (อื่นๆ/ไม่มีให้ตรวจ)</label><input v-model="newItem.opt3" class="border p-2 rounded w-full focus:ring-2 focus:ring-gray-300 outline-none"></div>
+                            <div class="flex flex-col gap-2 p-2 rounded border bg-white col-span-1">
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" v-model="newItem.hasQty" class="w-4 h-4 cursor-pointer"><span class="text-sm font-bold cursor-pointer select-none">มีช่องจำนวน?</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" v-model="newItem.hasText" class="w-4 h-4 cursor-pointer"><span class="text-sm font-bold cursor-pointer select-none text-blue-600">มีช่องข้อความ?</span></label>
+                            </div>
+                        </div>
+                        <button @click="saveSettingItem" :class="editSettingMode ? 'bg-orange-500 hover:bg-orange-600' : 'bg-green-600 hover:bg-green-700'" class="text-white px-8 py-3 rounded-lg font-bold w-full mt-6 shadow transition">{{ editSettingMode ? '💾 อัปเดตข้อมูล' : '➕ บันทึกรายการใหม่' }}</button>
+                    </div>
+                    
+                    <div v-if="!filteredSettingsView || filteredSettingsView.length === 0" class="text-center text-gray-500 py-10 bg-white border rounded">ยังไม่มีหัวข้อการตรวจสำหรับกลุ่ม "{{ settingFilter }}"</div>
+
+                    <template v-for="(cat, catIdx) in filteredSettingsView" :key="cat.name">
+                        <div class="border rounded bg-white shadow-sm mb-4">
+                            <div class="bg-gray-100 p-3 font-bold flex justify-between items-center">
+                                <div class="flex items-center gap-2">
+                                    <span>{{ cat.name }}</span>
+                                    <button @click="renameCategory(cat.name)" class="text-gray-400 hover:text-blue-600 text-sm" title="เปลี่ยนชื่อหมวดหมู่">✏️</button>
+                                </div>
+                                <div class="flex gap-2 text-xs">
+                                    <button @click="moveCategory(cat.name, 'UP')" class="bg-gray-200 px-2 rounded hover:bg-gray-300">⬆️</button>
+                                    <button @click="moveCategory(cat.name, 'DOWN')" class="bg-gray-200 px-2 rounded hover:bg-gray-300">⬇️</button>
+                                </div>
+                            </div>
+                            <div class="p-4">
+                                <template v-for="(item, idx) in cat.items">
+                                    <div class="border-b py-2 flex justify-between items-center">
+                                        <div class="flex-grow">
+                                            <span>{{ idx+1 }}. {{ item.item }}</span>
+                                            <span v-if="item.subItem" class="text-xs text-gray-400">({{ item.subItem }})</span>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <button @click="moveItem(item, 'UP')" class="text-gray-500 hover:text-blue-600 text-sm">⬆️</button>
+                                            <button @click="moveItem(item, 'DOWN')" class="text-gray-500 hover:text-blue-600 text-sm">⬇️</button>
+                                            <button @click="editChecklistItem(item)" class="text-blue-500 hover:text-blue-700 text-sm">✏️</button>
+                                            <button @click="deleteSettingItem(item)" class="text-red-500 hover:text-red-700 text-sm">🗑️</button>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ======================================================= -->
+    <!-- กระดาษ A4 สำหรับปริ้นและทำ PDF วางแอบอยู่นอกจอเสมอ 100% -->
+    <!-- ======================================================= -->
+    <div id="print-wrapper">
+         
+         <!-- ใบปะหน้า แนวนอน -->
+         <template v-if="isPrintingCover && printQueue.length > 0">
+             <div v-for="(chunk, cIdx) in coverPageChunks" :key="'cp-page-'+cIdx" class="print-cover-page">
+                <div class="cp-content-top">
+                    <div class="cp-header">รายงานตรวจสอบรถ รับ-ส่ง ประจำเดือน {{ coverMonthName() }} ปี {{ coverPage.year }}</div>
+                    
+                    <!-- ส่วนวันที่และลายเซ็น (อยู่ด้านบนใต้หัวกระดาษ) -->
+                    <div class="cp-sub">
+                        <div style="font-size: 12pt;"><b>เรียน</b> {{ coverPage.to }}</div>
+                        <div style="text-align: right;">
+                            <div style="margin-bottom: 10px; font-size: 12pt;"><b>วันที่จัดทำเอกสาร:</b> {{ formatDateDisplay(coverPage.docDate) }}</div>
+                            
+                            <!-- ลายเซ็น 4 ช่อง ย้ายมาอยู่ตรงนี้ -->
+                            <div style="display: flex; justify-content: flex-end; gap: 20px; font-size: 9pt; text-align: center;">
+                                <div style="width: 100px;">
+                                    <div style="border-bottom: 1px dotted #000; height: 18px; margin-bottom: 3px; color: #1e40af;">{{ coverPage.maker || '' }}</div>
+                                    จัดทำโดย
+                                </div>
+                                <div style="width: 100px;">
+                                    <div style="border-bottom: 1px dotted #000; height: 18px; margin-bottom: 3px; color: #1e40af;">{{ coverPage.checker || '' }}</div>
+                                    ตรวจสอบโดย
+                                </div>
+                                <div style="width: 120px;">
+                                    <div style="border-bottom: 1px dotted #000; height: 18px; margin-bottom: 3px; color: #1e40af;">{{ coverPage.safety || '' }}</div>
+                                    เจ้าหน้าที่ความปลอดภัย
+                                </div>
+                                <div style="width: 100px;">
+                                    <div style="border-bottom: 1px dotted #000; height: 18px; margin-bottom: 3px; color: #1e40af;">{{ coverPage.manager || '' }}</div>
+                                    ผู้จัดการ
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center; font-weight: bold; margin-bottom: 5px; margin-top: 10px;">
+                        ใบทะเบียนรถ ( Car List ) <span v-if="coverPageChunks.length > 1">- หน้า {{ cIdx + 1 }}/{{ coverPageChunks.length }}</span>
+                    </div>
+                    
+                    <table class="cp-table">
+                        <thead>
+                            <tr>
+                                <th width="4%">ลำดับ</th>
+                                <th width="8%">บริษัท</th>
+                                <th width="6%">สายรถ</th>
+                                <th width="7%">ทะเบียนรถ</th>
+                                <th width="6%">ประเภทรถ</th>
+                                <th width="4%">เพศ</th>
+                                <th width="12%">ชื่อ-สกุล</th>
+                                <th width="8%">เบอร์โทร</th>
+                                <th width="7%">ปชช.</th>
+                                <th width="7%">ใบขับขี่</th>
+                                <th width="7%">ป้ายภาษี</th>
+                                <th width="7%">ประกันภัย</th>
+                                <th width="7%">พรบ.</th>
+                                <th width="5%">กล้อง</th>
+                                <th width="5%">GPS</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template v-for="(item, idx) in chunk" :key="'cp-row-'+cIdx+'-'+idx">
+                                <tr>
+                                    <td>{{ (cIdx * 15) + idx + 1 }}</td>
+                                    <td>{{ item.factory }}</td>
+                                    <td>{{ item.route }}</td>
+                                    <td>{{ item.plate }}</td>
+                                    <td>{{ item.type }}</td>
+                                    <td>{{ item.gender || '-' }}</td>
+                                    <td style="text-align: left;">{{ item.driver }}</td>
+                                    <td>{{ item.phone || '-' }}</td>
+                                    <td>{{ item.idCardExp ? formatDateDisplay(item.idCardExp) : '-' }}</td>
+                                    <td>{{ item.licenseExp ? formatDateDisplay(item.licenseExp) : '-' }}</td>
+                                    <td>{{ item.taxExp ? formatDateDisplay(item.taxExp) : '-' }}</td>
+                                    <td>{{ item.insuranceExp ? formatDateDisplay(item.insuranceExp) : '-' }}</td>
+                                    <td>{{ item.actExp ? formatDateDisplay(item.actExp) : '-' }}</td>
+                                    <td>{{ item.camera }}</td>
+                                    <td>{{ item.gps }}</td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+             </div>
+         </template>
+         
+         <!-- ใบตรวจรถรายคัน แนวตั้ง -->
+         <template v-for="(data, qIdx) in printQueue" :key="'print-'+qIdx">
+             <div class="print-page bg-white">
+                 <table class="pdf-t-collapse" style="margin-bottom: 15px; width: 100%;">
+                     <tr><td style="text-align: center; vertical-align: bottom;"><div class="pdf-title">ใบบันทึกการตรวจเช็คสภาพรถ</div><div class="pdf-subtitle">VEHICLE INSPECTION CHECKLIST - Choknittayatour</div></td></tr>
+                     <tr><td style="padding-top: 10px;"><table class="pdf-t-collapse" style="border: none; width: 100%;"><tr><td style="text-align: left; font-size: 10pt; font-weight: bold; color: #333; border: none;"><b>วันที่ตรวจ:</b> {{ formatDateDisplay(data.date) }}</td></tr></table></td></tr>
+                 </table>
+                 
+                 <table class="pdf-info-table">
+                     <tr><td class="pdf-info-label">ทะเบียนรถ</td><td class="pdf-info-val">{{ data.plate || '-' }}</td><td class="pdf-info-label">ประเภท</td><td class="pdf-info-val">{{ data.type || '-' }}</td><td class="pdf-info-label">เลขไมล์</td><td class="pdf-info-val">{{ data.mileage || '-' }}</td></tr>
+                     <tr><td class="pdf-info-label">โรงงาน</td><td class="pdf-info-val">{{ data.factory || '-' }}</td><td class="pdf-info-label">พขร.</td><td class="pdf-info-val">{{ data.driver || '-' }}</td><td class="pdf-info-label">สายรถ</td><td class="pdf-info-val">{{ data.route || '-' }}</td></tr>
+                     <tr><td class="pdf-info-label">กล้อง (Mem)</td><td class="pdf-info-val">{{ data.camera || '-' }}</td><td class="pdf-info-label">GPS</td><td class="pdf-info-val">{{ data.gps || '-' }}</td><td class="pdf-info-label">ผู้ตรวจ</td><td class="pdf-info-val">{{ data.inspector && data.inspector !== 'undefined' ? data.inspector : '-' }}</td></tr>
+                 </table>
+                 
+                 <table class="pdf-t-collapse" style="border: none; margin-bottom: 10px; table-layout: fixed;">
+                     <tr>
+                         <td width="49%" style="vertical-align: top; padding-right: 5px; border: none;">
+                             <table class="pdf-cat-table">
+                                 <thead><tr><th class="cat-col-name">เอกสารประจำรถ</th><th class="cat-col-res">สถานะ</th></tr></thead>
+                                 <tbody><template v-for="(item, key) in docFields" :key="'pdoc-'+key"><tr><td>{{ item.label }}</td><td class="text-center font-bold" style="text-align: center; vertical-align: middle;"><span v-if="item.isNotDate">{{ data[item.field] || '-' }}</span><span v-else>{{ formatDateDisplay(data[item.field]) }}</span></td></tr></template></tbody>
+                             </table>
+                             <template v-for="(cat, idx) in getPdfCategories(data, 'left')" :key="'pcatl-'+idx">
+                                 <table class="pdf-cat-table">
+                                     <thead><tr><th class="cat-col-name">{{ cat.name }}</th><th class="cat-col-res">ผลตรวจ</th></tr></thead>
+                                     <tbody>
+                                         <template v-for="(item, i) in cat.items" :key="'piteml-'+i">
+                                             <tr>
+                                                 <td>{{ item.item }} <span v-if="item.item.toUpperCase().includes('GPS') && data.gps" class="text-[7pt] ml-1 font-bold text-blue-800">({{ data.gps }})</span> <span v-if="item.item.includes('กล้อง') && data.camera" class="text-[7pt] ml-1 font-bold text-blue-800">({{ data.camera }})</span> </td>
+                                                 <td style="text-align: center; vertical-align: middle;">
+                                                     <div :class="getCheckVal(data, cat.name, item) === item.opt1 ? 'res-ok' : (getCheckVal(data, cat.name, item) === '-' ? 'res-none' : 'res-fail')">{{ getCheckVal(data, cat.name, item) }}</div>
+                                                     <div v-if="item.hasQty && getQtyVal(data, cat.name, item) && getCheckVal(data, cat.name, item) !== '-'" class="pdf-qty">(จำนวน: {{ getQtyVal(data, cat.name, item) }})</div>
+                                                     <div v-if="getTextVal(data, cat.name, item) && getCheckVal(data, cat.name, item) !== '-'" class="pdf-extra">{{ getTextVal(data, cat.name, item) }}</div>
+                                                     <div v-if="getNoteVal(data, cat.name, item) && getCheckVal(data, cat.name, item) !== '-'" class="pdf-note">* {{ getNoteVal(data, cat.name, item) }}</div>
+                                                 </td>
+                                             </tr>
+                                         </template>
+                                     </tbody>
+                                 </table>
+                             </template>
+                         </td>
+                         <td width="2%" style="border: none;"></td>
+                         <td width="49%" style="vertical-align: top; padding-left: 5px; border: none;">
+                             <template v-for="(cat, idx) in getPdfCategories(data, 'right')" :key="'pcatr-'+idx">
+                                 <table class="pdf-cat-table">
+                                     <thead><tr><th class="cat-col-name">{{ cat.name }}</th><th class="cat-col-res">ผลตรวจ</th></tr></thead>
+                                     <tbody>
+                                         <template v-for="(item, i) in cat.items" :key="'pitemr-'+i">
+                                             <tr>
+                                                 <td>{{ item.item }} <span v-if="item.item.toUpperCase().includes('GPS') && data.gps" class="text-[7pt] ml-1 font-bold text-blue-800">({{ data.gps }})</span> <span v-if="item.item.includes('กล้อง') && data.camera" class="text-[7pt] ml-1 font-bold text-blue-800">({{ data.camera }})</span> </td>
+                                                 <td style="text-align: center; vertical-align: middle;">
+                                                     <div :class="getCheckVal(data, cat.name, item) === item.opt1 ? 'res-ok' : (getCheckVal(data, cat.name, item) === '-' ? 'res-none' : 'res-fail')">{{ getCheckVal(data, cat.name, item) }}</div>
+                                                     <div v-if="item.hasQty && getQtyVal(data, cat.name, item) && getCheckVal(data, cat.name, item) !== '-'" class="pdf-qty">(จำนวน: {{ getQtyVal(data, cat.name, item) }})</div>
+                                                     <div v-if="getTextVal(data, cat.name, item) && getCheckVal(data, cat.name, item) !== '-'" class="pdf-extra">{{ getTextVal(data, cat.name, item) }}</div>
+                                                     <div v-if="getNoteVal(data, cat.name, item) && getCheckVal(data, cat.name, item) !== '-'" class="pdf-note">* {{ getNoteVal(data, cat.name, item) }}</div>
+                                                 </td>
+                                             </tr>
+                                         </template>
+                                     </tbody>
+                                 </table>
+                             </template>
+                         </td>
+                     </tr>
+                 </table>
+                 
+                 <div class="pdf-suggestion"><b>ข้อเสนอแนะ:</b> {{ data.suggestion && data.suggestion !== '-' ? data.suggestion : '- ไม่มี -' }}</div>
+                 
+                 <!-- คืนช่องลายเซ็น พนักงานขับรถ ใน PDF ตามคำสั่ง (โดยไม่มีวันที่) -->
+                 <table class="pdf-sig-container">
+                     <tr>
+                         <td class="pdf-sig-box">
+                             <div class="pdf-sig-name">{{ data.inspector && data.inspector !== 'undefined' ? data.inspector : '-' }}</div>
+                             <div class="pdf-sig-line"></div>
+                             <div class="pdf-sig-role">ผู้ตรวจสอบ (Inspector)</div>
+                             <div class="pdf-sig-date">ลงชื่ออัตโนมัติจากระบบ</div>
+                         </td>
+                         <td class="pdf-sig-box">
+                             <div class="pdf-sig-name">{{ data.driver || '-' }}</div>
+                             <div class="pdf-sig-line"></div>
+                             <div class="pdf-sig-role">พนักงานขับรถ (Driver)</div>
+                         </td>
+                     </tr>
+                 </table>
+             </div>
+         </template>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- MODALS ต่างๆ ของระบบ -->
+    <!-- ============================================== -->
+
+    <!-- Modal ถ่ายรูป/คลังภาพ -->
+    <div v-if="showEvidenceModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="bg-gray-800 text-white p-4 flex justify-between items-center">
+                <h3 class="text-xl font-bold"><span v-if="evidenceMode==='upload'">📤 แนบรูปภาพ:</span><span v-else>🖼️ ดูรูปภาพ:</span> {{ currentEvidencePlate }}</h3>
+                <button @click="showEvidenceModal=false" class="text-2xl hover:text-gray-300">&times;</button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-grow bg-gray-100">
+                <div v-if="evidenceMode === 'upload'" class="text-center py-8 bg-white rounded shadow-sm border-2 border-dashed border-gray-300">
+                    <div class="text-6xl mb-4">📷</div>
+                    <p class="text-gray-600 mb-4">เลือกรูปภาพหรือถ่ายรูป (ระบบจะย่อขนาดอัตโนมัติ)</p>
+                    <div class="flex justify-center gap-4 flex-wrap">
+                        <label class="bg-blue-600 text-white px-6 py-3 rounded-lg cursor-pointer hover:bg-blue-700 font-bold shadow-lg transition">
+                            <span>🖼️ เลือกจากคลังรูป</span>
+                            <input type="file" accept="image/*" class="hidden" @change="handleFileUpload">
+                        </label>
+                        <label class="bg-green-600 text-white px-6 py-3 rounded-lg cursor-pointer hover:bg-green-700 font-bold shadow-lg transition">
+                            <span>📸 ถ่ายรูปภาพ</span>
+                            <input type="file" accept="image/*" capture="environment" class="hidden" @change="handleFileUpload">
+                        </label>
+                    </div>
+                </div>
+                
+                <div v-if="evidenceMode === 'view'">
+                    <div v-if="!evidenceImages || evidenceImages.length === 0" class="text-center text-gray-400 py-20 bg-white rounded shadow-sm"><div class="text-4xl mb-2">📭</div>ยังไม่มีรูปภาพ</div>
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <template v-for="(img, idx) in evidenceImages" :key="idx">
+                            <div class="relative group border rounded-lg bg-white p-2 shadow-md hover:shadow-xl transition">
+                                <img :src="img.src" class="w-full h-40 object-cover rounded cursor-pointer hover:opacity-90" @click="viewImage(img.src)">
+                                <div class="text-xs text-gray-500 mt-2 text-center font-bold">{{ img.date }}</div>
+                                <button @click="deleteImage(img)" class="absolute top-2 right-2 bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center shadow-lg opacity-80 hover:opacity-100 hover:bg-red-700 transition" title="ลบรูป">🗑️</button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal ป๊อปอัพสถานะรายโรงงาน -->
+    <div v-if="showDetailModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" @click.self="showDetailModal=false">
+        <div class="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl">
+            <div class="bg-blue-900 text-white p-4 flex justify-between items-center">
+                <h3 class="text-xl font-bold">🏭 {{ selectedFactoryName }}</h3>
+                <button @click="showDetailModal=false" class="text-white hover:text-gray-300 text-2xl">&times;</button>
+            </div>
+            <div class="p-4 overflow-y-auto flex-grow bg-gray-50">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <template v-for="(car, idx) in selectedFactoryDetails" :key="idx">
+                        <div class="bg-white p-4 rounded-lg shadow border-l-4" :class="car.statusClass">
+                            <div class="flex justify-between items-start mb-2">
+                                <div class="font-bold text-lg text-gray-800">{{ car.plate }}</div>
+                                <span class="text-xs px-2 py-1 rounded font-bold" :class="car.badgeClass">{{ car.statusText }}</span>
+                            </div>
+                            <div class="text-sm text-gray-500 mb-1">👤 {{ car.driverName || '-' }}</div>
+                            <div class="text-xs text-gray-400">ตรวจล่าสุด: {{ formatDateDisplay(car.lastCheck) }}</div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ดูรูปภาพขนาดเต็ม -->
+    <div v-if="viewingImage" class="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4" @click="viewingImage=null">
+        <img :src="viewingImage" class="max-w-full max-h-full rounded shadow-2xl">
+    </div>
+    
+    <!-- Modal ตั้งค่าระบบ + โหมดเร่งด่วน -->
+    <div v-if="showConfigModal" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div class="bg-gray-800 text-white p-4 border-b border-gray-700">
+                <h3 class="text-xl font-bold flex items-center gap-2">⚙️ ตั้งค่าระบบ</h3>
+            </div>
+            
+            <div class="p-6 bg-gray-50 space-y-6">
+                <!-- ส่วนที่ 1: ระบบเปิด-ปิดหน้าตรวจรถ -->
+                <div class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                    <h4 class="font-bold text-blue-800 border-b pb-2 mb-3">🕒 เวลาทำการ (หน้าตรวจรถ)</h4>
+                    <div class="grid grid-cols-2 gap-4 mb-3">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">เวลาเปิด</label>
+                            <input type="time" v-model="tempConfig.startTime" class="border border-gray-300 p-2 rounded w-full focus:ring-2 focus:ring-blue-400 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">เวลาปิด</label>
+                            <input type="time" v-model="tempConfig.endTime" class="border border-gray-300 p-2 rounded w-full focus:ring-2 focus:ring-blue-400 outline-none">
+                        </div>
+                    </div>
+                    <label class="flex items-center cursor-pointer bg-red-50 p-2 rounded border border-red-200">
+                        <input type="checkbox" v-model="tempConfig.manualClose" class="mr-2 w-5 h-5 accent-red-600">
+                        <span class="font-bold text-red-700 text-sm">ปิดปรับปรุงระบบทันที (Manual Close)</span>
+                    </label>
+                </div>
+
+                <!-- ส่วนที่ 2: โหมดเร่งด่วน (Fast Mode) ปิดเมนูอื่นชั่วคราว -->
+                <div class="bg-white p-4 rounded-lg border border-orange-200 shadow-sm">
+                    <h4 class="font-bold text-orange-600 border-b pb-2 mb-3 flex items-center gap-1">⚡ โหมดเร่งด่วน <span class="text-xs font-normal text-gray-500">(ซ่อนเมนูอื่นเพื่อลดอาการค้าง)</span></h4>
+                    <div class="grid grid-cols-2 gap-4 mb-3">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">เริ่มซ่อนเมนู</label>
+                            <input type="time" v-model="tempConfig.fastStartTime" class="border border-gray-300 p-2 rounded w-full focus:ring-2 focus:ring-orange-400 outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1">เลิกซ่อนเมนู</label>
+                            <input type="time" v-model="tempConfig.fastEndTime" class="border border-gray-300 p-2 rounded w-full focus:ring-2 focus:ring-orange-400 outline-none">
+                        </div>
+                    </div>
+                    <label class="flex items-center cursor-pointer bg-orange-50 p-2 rounded border border-orange-300">
+                        <input type="checkbox" v-model="tempConfig.fastManual" class="mr-2 w-5 h-5 accent-orange-600">
+                        <span class="font-bold text-orange-700 text-sm">บังคับเปิดโหมดเร่งด่วนทันที</span>
+                    </label>
+                </div>
+            </div>
+            
+            <div class="bg-white p-4 border-t flex justify-end gap-3">
+                <button @click="showConfigModal=false" class="px-5 py-2 border border-gray-300 text-gray-600 rounded hover:bg-gray-100 font-bold transition">ยกเลิก</button>
+                <button @click="saveConfig" class="px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 font-bold shadow-md transition">💾 บันทึกตั้งค่า</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal จัดหน้า PDF -->
+    <div v-if="showPdfSettingModal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4">
+        <div class="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl">
+            <div class="bg-indigo-900 text-white p-4 flex justify-between items-center rounded-t-xl">
+                <h3 class="text-xl font-bold">📄 ตั้งค่ารูปแบบ PDF (จัดเรียงซ้าย-ขวา)</h3>
+                <button @click="showPdfSettingModal=false" class="text-white hover:text-gray-300 text-2xl">&times;</button>
+            </div>
+            <div class="p-4 bg-gray-50 flex gap-4 border-b items-center">
+                <label class="font-bold text-gray-700">เลือกประเภทรถ:</label>
+                <select v-model="pdfSettingType" @change="loadPdfSetting" class="border p-2 rounded font-bold text-indigo-900 outline-none">
+                    <option value="Van">Van (รถตู้)</option>
+                    <option value="Bus">Bus (รถบัส)</option>
+                    <option value="Busซันลอง">Bus ซันลอง</option>
+                    <option value="Car">Car (รถเก๋ง)</option>
+                    <option value="EV">EV (รถไฟฟ้า)</option>
+                </select>
+                <button @click="resetPdfSetting" class="text-sm bg-gray-300 px-4 py-2 rounded font-bold hover:bg-gray-400 transition ml-auto">🔄 รีเซ็ตเป็นค่าเริ่มต้น</button>
+            </div>
+            <div class="p-4 flex-grow overflow-y-auto flex flex-col md:flex-row gap-6 bg-gray-100">
+                <div class="w-full md:w-1/2 border-2 border-indigo-200 rounded-lg bg-white p-3 shadow-sm min-h-[300px]">
+                    <h4 class="font-bold text-center text-indigo-800 mb-3 border-b pb-2">คอลัมน์ซ้าย (Left)</h4>
+                    <div class="bg-gray-200 p-2 mb-2 rounded text-sm text-gray-600 font-bold text-center border border-dashed">📄 เอกสารประจำรถ (ล็อคไว้)</div>
+                    <template v-for="(cat, idx) in pdfLayoutConfig[pdfSettingType]?.left" :key="'l-'+idx">
+                        <div class="flex justify-between items-center bg-indigo-50 border border-indigo-100 p-2 mb-2 rounded shadow-sm hover:bg-indigo-100 transition">
+                            <span class="font-bold text-sm truncate w-3/5 text-indigo-900">{{ cat }}</span>
+                            <div class="flex gap-1">
+                                <button @click="movePdfCat('left', idx, -1)" class="bg-white border rounded px-2 py-1 text-xs">⬆️</button>
+                                <button @click="movePdfCat('left', idx, 1)" class="bg-white border rounded px-2 py-1 text-xs">⬇️</button>
+                                <button @click="transferPdfCat('left', idx)" class="bg-blue-100 text-blue-800 border border-blue-300 rounded px-2 py-1 text-xs font-bold shadow-sm">ย้าย ➡️</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+                <div class="w-full md:w-1/2 border-2 border-indigo-200 rounded-lg bg-white p-3 shadow-sm min-h-[300px]">
+                    <h4 class="font-bold text-center text-indigo-800 mb-3 border-b pb-2">คอลัมน์ขวา (Right)</h4>
+                    <template v-for="(cat, idx) in pdfLayoutConfig[pdfSettingType]?.right" :key="'r-'+idx">
+                        <div class="flex justify-between items-center bg-indigo-50 border border-indigo-100 p-2 mb-2 rounded shadow-sm hover:bg-indigo-100 transition">
+                            <div class="flex gap-1">
+                                <button @click="transferPdfCat('right', idx)" class="bg-blue-100 text-blue-800 border border-blue-300 rounded px-2 py-1 text-xs font-bold shadow-sm">⬅️ ย้าย</button>
+                            </div>
+                            <span class="font-bold text-sm truncate text-right w-2/5 text-indigo-900">{{ cat }}</span>
+                            <div class="flex gap-1">
+                                <button @click="movePdfCat('right', idx, -1)" class="bg-white border rounded px-2 py-1 text-xs">⬆️</button>
+                                <button @click="movePdfCat('right', idx, 1)" class="bg-white border rounded px-2 py-1 text-xs">⬇️</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            <div class="p-4 bg-white text-right border-t rounded-b-xl">
+                <button @click="savePdfSetting" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg shadow-lg transform hover:scale-105 text-lg">💾 บันทึกการจัดเรียง</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- JAVASCRIPT & VUE.JS -->
+    <!-- ============================================== -->
+    <script>
+        const { createApp } = Vue;
+
+        const app = createApp({
+            data() { 
+                return { 
+                    viewMode: false, 
+                    currentPage: 'inspection', 
+                    isLoggedIn: false, 
+                    showRegister: false,
+                    user: {}, 
+                    loginForm: { username: '', password: '' }, 
+                    regForm: { username: '', password: '', fullname: '', email: '', empId: '', dept: '', phone: '', pdpa: false },
+                    loading: false, 
+                    loadingText: '', 
+                    carData: {}, 
+                    searchPlate: '', 
+                    checklistData: {}, 
+                    checks: {}, 
+                    originalChecks: {}, 
+                    notes: {}, 
+                    qty: {}, 
+                    textInputs: {},
+                    checklistFontSize: 16, 
+                    docFields: [ 
+                        { label: 'ใบขับขี่', field: 'licenseExp' }, 
+                        { label: 'ประกันภัย', field: 'insuranceExp' }, 
+                        { label: 'คุ้มครอง (จำนวน)', field: 'passengerCount', isNotDate: true }, 
+                        { label: 'วงเงินคุ้มครอง', field: 'coverAmt', isNotDate: true }, 
+                        { label: 'พรบ.', field: 'actExp' }, 
+                        { label: 'ภาษี', field: 'taxExp' }, 
+                        { label: 'บัตรประชาชน', field: 'idCardExp' } 
+                    ],
+                    maintenanceList: [], 
+                    allDrivers: [], 
+                    filters: { start: '', end: '', factory: '', searchPlate: '' }, 
+                    filtersApplied: false,
+                    trackFilters: { start: new Date().toISOString().split('T')[0], end: new Date().toISOString().split('T')[0], fac1: '', fac2: '', fac3: '' }, 
+                    trackFiltersApplied: false,
+                    
+                    passedFilterMonth: ('0' + (new Date().getMonth() + 1)).slice(-2),
+                    passedFilterYear: new Date().getFullYear().toString(),
+                    passedFilterFactory: '',
+                    passedFilterExactDate: '',
+
+                    editMode: false, 
+                    editItem: null, 
+                    pdfFactory: '', 
+                    printList: [], 
+                    showDetailModal: false, 
+                    modalItem: {}, 
+                    modalChecks: {}, 
+                    driverAck: false, 
+                    suggestion: '', 
+                    checkDate: new Date().toISOString().split('T')[0],
+                    
+                    newItem: { category:'', item:'', subItem:'', opt1:'ปกติ', opt2:'ไม่ปกติ', opt3:'ไม่มีให้ตรวจ', hasQty:false, hasText:false, tag:'' },
+                    editSettingMode: false, 
+                    editingSettingRow: null, 
+                    selectedFactoryDetails: [], 
+                    selectedFactoryName: '',
+                    activeTab: 'fix', 
+                    currentPageNum: 1, 
+                    historyPage: 1, 
+                    summarySearchPlate: '', 
+                    printQueue: [], 
+                    summaryData: {}, 
+                    historyFactories: [], 
+                    selectedPrintFactory: '', 
+                    sentHistory: [],
+                    selectedStatusMonth: ('0' + (new Date().getMonth() + 1)).slice(-2), 
+                    selectedStatusYear: new Date().getFullYear().toString(),
+                    rankMonth: ('0' + (new Date().getMonth() + 1)).slice(-2), 
+                    rankYear: new Date().getFullYear().toString(),
+                    
+                    systemConfig: { startTime: '06:00', endTime: '17:30', manualClose: false, fastStartTime: '06:00', fastEndTime: '08:30', fastManual: false }, 
+                    showConfigModal: false, 
+                    tempConfig: {}, 
+                    currentTimeVal: 0,
+                    loginTimestamp: null, 
+                    userTotalTimes: {}, 
+                    heartbeatCounter: 0, 
+                    idleTimer: 0,
+                    
+                    showEvidenceModal: false, 
+                    currentEvidencePlate: '', 
+                    evidenceImages: [], 
+                    viewingImage: null, 
+                    evidenceMode: 'view',
+                    
+                    statusSearch: '', 
+                    selectedFactories: [], 
+                    printFilterStart: '', 
+                    printFilterEnd: '',
+                    settingFilter: 'Common',
+                    
+                    showPdfSettingModal: false,
+                    pdfSettingType: 'Van',
+                    pdfLayoutConfig: { 'Van': {left:[], right:[]}, 'Bus': {left:[], right:[]}, 'Busซันลอง': {left:[], right:[]}, 'Car': {left:[], right:[]}, 'EV': {left:[], right:[]} },
+                    
+                    isPrintingCover: false,
+                    coverPage: {
+                        to: '',
+                        month: ('0' + (new Date().getMonth() + 1)).slice(-2),
+                        year: new Date().getFullYear().toString(),
+                        docDate: new Date().toISOString().split('T')[0],
+                        maker: '',
+                        checker: '',
+                        safety: '',
+                        manager: ''
+                    }
+                }
+            },
+            mounted() { 
+                const savedUser = localStorage.getItem('nyt_user');
+                const savedTime = localStorage.getItem('nyt_login_time');
+                if (savedUser) {
+                    this.user = JSON.parse(savedUser);
+                    this.isLoggedIn = true;
+                    this.loginTimestamp = parseInt(savedTime);
+                    this.initData();
+                }
+                
+                const savedPdfLayout = localStorage.getItem('nyt_pdf_layout');
+                if(savedPdfLayout) {
+                    try { this.pdfLayoutConfig = JSON.parse(savedPdfLayout); } catch(e){}
+                }
+
+                setInterval(() => { 
+                    this.currentTimeVal = Date.now(); 
+                    if(this.isLoggedIn) {
+                        this.idleTimer++; 
+                        
+                        let timeInSystem = this.currentTimeVal - this.loginTimestamp;
+                        if (timeInSystem >= 3600000) {
+                            this.logout(); 
+                            Swal.fire('หมดเวลา', 'คุณอยู่ในระบบครบ 1 ชั่วโมงแล้ว<br>ระบบบังคับให้ออกจากระบบเพื่อความปลอดภัย กรุณาเข้าสู่ระบบใหม่ครับ', 'info'); 
+                            return;
+                        }
+
+                        if(this.idleTimer >= 3600) { 
+                            this.logout(); 
+                            Swal.fire('หมดเวลาเชื่อมต่อ', 'ไม่มีการใช้งานเกิน 1 ชั่วโมง', 'info'); 
+                            return;
+                        }
+                        
+                        this.heartbeatCounter++;
+                        if(this.heartbeatCounter >= 60) { 
+                            google.script.run.updateUserTime(this.user.username, 60000); 
+                            this.heartbeatCounter = 0; 
+                        }
+                    }
+                }, 1000); 
+                
+                window.addEventListener('mousemove', this.resetIdle); 
+                window.addEventListener('click', this.resetIdle); 
+                window.addEventListener('keydown', this.resetIdle);
+            },
+            watch: { 
+                selectedStatusMonth() { this.updateDateRange(); }, 
+                selectedStatusYear() { this.updateDateRange(); },
+                settingFilter() { this.newItem.tag = this.settingFilter; this.cancelEditSetting(); },
+                isFastModeActive(newVal) {
+                    if (newVal && this.user.role !== 'Administrator' && this.currentPage !== 'inspection') {
+                        this.currentPage = 'inspection';
+                    }
+                }
+            },
+            computed: {
+                factoryList() { return [...new Set((this.allDrivers || []).map(d=>d.factory))].filter(f=>f).sort(); },
+                plateList() { return [...new Set((this.maintenanceList || []).map(i=>i.plate))].sort(); },
+                
+                factoryStats() { 
+                    let stats = {}; 
+                    this.factoryList.forEach(f => stats[f] = { count: 0, checked: 0 }); 
+                    (this.allDrivers || []).forEach(d => { if (stats[d.factory]) stats[d.factory].count++; }); 
+                    (this.maintenanceList || []).forEach(m => { 
+                        if (m.factory && stats[m.factory]) { 
+                            let mDate = String(m.date || '').split('-'); 
+                            if (mDate[1] === this.selectedStatusMonth && mDate[0] === this.selectedStatusYear) { 
+                                stats[m.factory].checked++; 
+                            } 
+                        } 
+                    }); 
+                    for (let f in stats) { if(stats[f].checked > stats[f].count) stats[f].checked = stats[f].count; } 
+                    return stats; 
+                },
+                
+                filteredFactoryStats() {
+                    let targetFactories = this.factoryList;
+                    if (this.selectedFactories && this.selectedFactories.length > 0) { targetFactories = this.selectedFactories; }
+                    const filtered = {};
+                    for (const [key, value] of Object.entries(this.factoryStats)) {
+                        if (targetFactories.includes(key)) { filtered[key] = value; }
+                    }
+                    return filtered;
+                },
+                
+                duplicatePlatesInQueue() { return (this.printQueue || []).filter(item => this.isMultiFactory(item.plate)).map(i => i.plate); },
+                
+                isSystemOpen() { 
+                    const now = new Date(); 
+                    const nowMinutes = now.getHours() * 60 + now.getMinutes(); 
+                    const [sh, sm] = String(this.systemConfig.startTime || '00:00').split(':'); 
+                    const [eh, em] = String(this.systemConfig.endTime || '23:59').split(':'); 
+                    const start = parseInt(sh) * 60 + parseInt(sm); 
+                    const end = parseInt(eh) * 60 + parseInt(em); 
+                    return nowMinutes >= start && nowMinutes <= end; 
+                },
+                
+                isInspectionBlocked() {
+                    if (this.user.role === 'Administrator') return false; 
+                    return this.systemConfig.manualClose || !this.isSystemOpen;
+                },
+
+                isFastModeTime() {
+                    const now = new Date(); 
+                    const nowMinutes = now.getHours() * 60 + now.getMinutes(); 
+                    const [sh, sm] = String(this.systemConfig.fastStartTime || '06:00').split(':'); 
+                    const [eh, em] = String(this.systemConfig.fastEndTime || '08:30').split(':'); 
+                    const start = parseInt(sh) * 60 + parseInt(sm); 
+                    const end = parseInt(eh) * 60 + parseInt(em); 
+                    return nowMinutes >= start && nowMinutes <= end;
+                },
+
+                isFastModeActive() {
+                    return this.systemConfig.fastManual || this.isFastModeTime;
+                },
+
+                filteredHistoryList() { 
+                    return (this.maintenanceList || []).filter(i => { 
+                        let dateOk = true; 
+                        if(this.trackFilters.start && this.trackFilters.end) { 
+                            if(i.date < this.trackFilters.start || i.date > this.trackFilters.end) dateOk = false; 
+                        } 
+                        return dateOk; 
+                    }); 
+                },
+                
+                paginatedHistory() { const start = (this.historyPage - 1) * 20; return this.filteredHistoryList.slice(start, start + 20); },
+                
+                filteredInspectionList() { 
+                    let list = this.maintenanceList || []; 
+                    if (this.filtersApplied) { 
+                        list = list.filter(i => { 
+                            let dateOk = true; 
+                            if(this.filters.start && this.filters.end) { 
+                                if(i.date < this.filters.start || i.date > this.filters.end) dateOk = false; 
+                            } 
+                            let facOk = !this.filters.factory || i.factory === this.filters.factory; 
+                            let plateOk = !this.filters.searchPlate || String(i.plate || '').includes(this.filters.searchPlate); 
+                            return dateOk && facOk && plateOk; 
+                        }); 
+                    } 
+                    return list; 
+                },
+                
+                fixList() { return this.filteredInspectionList.filter(i => (i.status === 'ไม่ผ่าน' || i.status === 'รอตรวจสอบ') && this.calculateDaysOver(i.date) <= 7); },
+                overdueList() { return this.filteredInspectionList.filter(i => (i.status === 'ไม่ผ่าน' || i.status === 'รอตรวจสอบ') && this.calculateDaysOver(i.date) > 7); },
+                pendingList() { return this.filteredInspectionList.filter(i => i.status === 'รอตรวจสอบ'); },
+                activeList() { return this.activeTab==='all' ? this.filteredInspectionList : (this.activeTab==='fix' ? this.fixList : (this.activeTab==='overdue' ? this.overdueList : this.pendingList)); },
+                paginatedList() { const start = (this.currentPageNum - 1) * 10; return this.activeList.slice(start, start + 10).map(i => ({...i, daysOver: this.calculateDaysOver(i.date)})); },
+                
+                filteredPassedList() {
+                    return (this.maintenanceList || []).filter(m => {
+                        if (m.status !== 'ผ่าน') return false;
+                        if (this.passedFilterFactory && m.factory !== this.passedFilterFactory) return false;
+                        
+                        if (this.passedFilterExactDate) {
+                            if (m.date !== this.passedFilterExactDate) return false;
+                        } else {
+                            let parts = String(m.date || '').split('-');
+                            if (parts.length === 3) {
+                                if (this.passedFilterYear && parts[0] !== this.passedFilterYear) return false;
+                                if (this.passedFilterMonth && parts[1] !== this.passedFilterMonth) return false;
+                            }
+                        }
+                        return true;
+                    }).sort((a, b) => (a.date < b.date ? 1 : -1));
+                },
+
+                factoryFailCounts() { 
+                    let c={}; 
+                    (this.maintenanceList || []).forEach(i=>{
+                        if(i.status!=='ผ่าน') c[i.factory]=(c[i.factory]||0)+1;
+                    }); 
+                    return c; 
+                },
+                
+                inspectorRanking() { 
+                    let counts = {}; 
+                    (this.maintenanceList || []).forEach(i => { 
+                        let dParts = String(i.date || '').split('-'); 
+                        if(dParts[0] === this.rankYear && dParts[1] === this.rankMonth) { 
+                            let name = i.inspector ? String(i.inspector).trim() : 'ไม่ระบุ'; 
+                            if (name) counts[name] = (counts[name] || 0) + 1; 
+                        } 
+                    }); 
+                    let sorted = Object.keys(counts).map(key => ({ name: key, count: counts[key], time: this.userTotalTimes[key] || 0 })).sort((a, b) => b.count - a.count); 
+                    return sorted; 
+                },
+                
+                sessionTimeDisplay() { 
+                    if(!this.loginTimestamp) return '00:00:00'; 
+                    let diff = Math.floor((this.currentTimeVal - this.loginTimestamp) / 1000); 
+                    let h = Math.floor(diff / 3600); 
+                    let m = Math.floor((diff % 3600) / 60); 
+                    let s = diff % 60; 
+                    return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`; 
+                },
+                
+                filteredStatusList() {
+                    let list = (this.maintenanceList || []).filter(m => {
+                        let parts = String(m.date || '').split('-');
+                        return parts[0] === this.selectedStatusYear && parts[1] === this.selectedStatusMonth;
+                    });
+                    if (this.selectedFactories && this.selectedFactories.length > 0) { list = list.filter(m => this.selectedFactories.includes(m.factory)); }
+                    else if (this.statusSearch) { 
+                        const term = this.statusSearch.toLowerCase(); 
+                        list = list.filter(m => String(m.factory || '').toLowerCase().includes(term) || String(m.plate || '').includes(term)); 
+                    }
+                    return list.sort((a, b) => (a.date < b.date ? 1 : -1));
+                },
+                
+                detectedLabel() {
+                    if (!this.carData) return 'Van';
+                    let aw = this.carData.carTypeAW;
+                    let t = this.carData.type;
+                    let val = aw ? String(aw) : (t ? String(t) : 'Van');
+                    return this.detectVehicleType(val);
+                },
+                
+                filteredSettingsView() {
+                    try {
+                        if (!this.checklistData) return [];
+                        let targetArray = this.checklistData[this.settingFilter];
+                        return Array.isArray(targetArray) ? targetArray : [];
+                    } catch(e) { return []; }
+                },
+
+                filteredChecklist() {
+                    try {
+                        if (!this.carData || !this.carData.plate || !this.checklistData) return []; 
+                        let targetKey = this.detectedLabel; 
+                        let targetArray = this.checklistData[targetKey];
+                        return Array.isArray(targetArray) ? targetArray : [];
+                    } catch(e) { return []; }
+                },
+
+                overallProgress() {
+                    let total = 0;
+                    let checked = 0;
+                    let remainingFacs = [];
+                    for (let fac in this.filteredFactoryStats) {
+                        let stat = this.filteredFactoryStats[fac];
+                        total += stat.count;
+                        checked += stat.checked;
+                        if (stat.checked < stat.count) {
+                            remainingFacs.push(fac);
+                        }
+                    }
+                    let percentChecked = total > 0 ? Math.round((checked / total) * 100) : 0;
+                    let percentRemaining = total > 0 ? 100 - percentChecked : 0;
+                    let remainingCount = total - checked;
+                    return { total, checked, remainingCount, percentChecked, percentRemaining, remainingFacs };
+                },
+
+                hasAbnormalItems() {
+                    if (!this.editMode) return true;
+                    for (let cat of this.filteredChecklist) {
+                        if (cat.items.some(item => this.shouldShowItem(cat.name, item))) return true;
+                    }
+                    return false;
+                },
+
+                coverPageChunks() {
+                    const chunkSize = 15;
+                    const chunks = [];
+                    for (let i = 0; i < this.printQueue.length; i += chunkSize) {
+                        chunks.push(this.printQueue.slice(i, i + chunkSize));
+                    }
+                    return chunks.length ? chunks : [[]];
+                }
+            },
+            methods: {
+                
+                coverMonthName() {
+                    const m = { "01":"มกราคม", "02":"กุมภาพันธ์", "03":"มีนาคม", "04":"เมษายน", "05":"พฤษภาคม", "06":"มิถุนายน", "07":"กรกฎาคม", "08":"สิงหาคม", "09":"กันยายน", "10":"ตุลาคม", "11":"พฤศจิกายน", "12":"ธันวาคม" };
+                    return m[this.coverPage.month] || "";
+                },
+
+                openFactoryDetail(factoryName) { 
+                    this.selectedFactoryName = factoryName; 
+                    const carsInFactory = (this.allDrivers || []).filter(d => d.factory === factoryName); 
+                    
+                    this.selectedFactoryDetails = carsInFactory.map(car => { 
+                        const inspection = (this.maintenanceList || []).find(m => { 
+                            const isPlateMatch = m.plate === car.plate; 
+                            const isDateMatch = m.date >= this.trackFilters.start && m.date <= this.trackFilters.end; 
+                            return isPlateMatch && isDateMatch; 
+                        }); 
+                        
+                        let statusText = "ยังไม่ได้มาตรวจ"; 
+                        let statusClass = "border-gray-300 bg-gray-50 opacity-80"; 
+                        let badgeClass = "bg-gray-200 text-gray-600 border border-gray-300 shadow-sm"; 
+                        let lastCheck = null; 
+                        
+                        if (inspection) { 
+                            lastCheck = inspection.date; 
+                            statusClass = "border-green-500 bg-white";
+                            if (inspection.status === 'ผ่าน') { 
+                                statusText = "ผ่าน"; 
+                                badgeClass = "bg-green-100 text-green-700 border border-green-300"; 
+                            } else { 
+                                statusText = "ไม่ผ่าน"; 
+                                statusClass = "border-red-500 bg-red-50"; 
+                                badgeClass = "bg-red-100 text-red-700 border border-red-300"; 
+                            } 
+                        } 
+                        
+                        return { plate: car.plate, driverName: car.driverName, statusText, statusClass, badgeClass, lastCheck }; 
+                    }); 
+                    this.showDetailModal = true; 
+                },
+
+                shouldShowItem(catName, item) {
+                    if (!this.editMode) return true; 
+                    let key = this.getCheckKey(catName, item);
+                    let originalVal = this.originalChecks[key];
+                    return this.isAbnormal(originalVal); 
+                },
+
+                shouldShowCategory(cat) {
+                    if (!this.editMode) return true;
+                    return cat.items.some(item => this.shouldShowItem(cat.name, item));
+                },
+
+                openConfigModal() {
+                    this.tempConfig = { ...this.systemConfig };
+                    this.showConfigModal = true;
+                },
+
+                openPdfSettings() {
+                    this.loadPdfSetting();
+                    this.showPdfSettingModal = true;
+                },
+                
+                loadPdfSetting() {
+                    if (!this.pdfLayoutConfig[this.pdfSettingType]) this.pdfLayoutConfig[this.pdfSettingType] = {left:[], right:[]};
+                    
+                    const cats = (this.checklistData[this.pdfSettingType] || []).map(c => c.name);
+                    let currentLeft = this.pdfLayoutConfig[this.pdfSettingType].left;
+                    let currentRight = this.pdfLayoutConfig[this.pdfSettingType].right;
+                    
+                    const existingCats = [...currentLeft, ...currentRight];
+                    const missingCats = cats.filter(c => !existingCats.includes(c));
+                    
+                    if (currentLeft.length === 0 && currentRight.length === 0) {
+                        const mid = Math.ceil(cats.length / 2);
+                        this.pdfLayoutConfig[this.pdfSettingType].left = cats.slice(0, mid);
+                        this.pdfLayoutConfig[this.pdfSettingType].right = cats.slice(mid);
+                    } else if (missingCats.length > 0) {
+                        this.pdfLayoutConfig[this.pdfSettingType].right.push(...missingCats);
+                    }
+                    
+                    this.pdfLayoutConfig[this.pdfSettingType].left = this.pdfLayoutConfig[this.pdfSettingType].left.filter(c => cats.includes(c));
+                    this.pdfLayoutConfig[this.pdfSettingType].right = this.pdfLayoutConfig[this.pdfSettingType].right.filter(c => cats.includes(c));
+                },
+                
+                resetPdfSetting() {
+                    const cats = (this.checklistData[this.pdfSettingType] || []).map(c => c.name);
+                    const mid = Math.ceil(cats.length / 2);
+                    this.pdfLayoutConfig[this.pdfSettingType].left = cats.slice(0, mid);
+                    this.pdfLayoutConfig[this.pdfSettingType].right = cats.slice(mid);
+                },
+                
+                movePdfCat(col, idx, dir) {
+                    const arr = this.pdfLayoutConfig[this.pdfSettingType][col];
+                    if (idx + dir < 0 || idx + dir >= arr.length) return;
+                    const temp = arr[idx];
+                    arr[idx] = arr[idx + dir];
+                    arr[idx + dir] = temp;
+                },
+                
+                transferPdfCat(fromCol, idx) {
+                    const toCol = fromCol === 'left' ? 'right' : 'left';
+                    const item = this.pdfLayoutConfig[this.pdfSettingType][fromCol].splice(idx, 1)[0];
+                    this.pdfLayoutConfig[this.pdfSettingType][toCol].push(item);
+                },
+                
+                savePdfSetting() {
+                    localStorage.setItem('nyt_pdf_layout', JSON.stringify(this.pdfLayoutConfig));
+                    Swal.fire('บันทึกสำเร็จ', 'รูปแบบ PDF ถูกอัปเดตแล้ว', 'success');
+                    this.showPdfSettingModal = false;
+                },
+                
+                getPdfCategories(data, columnStr) {
+                    try {
+                        const carTypeStr = String(data.carTypeAW || data.type || '');
+                        const targetTag = this.detectVehicleType(carTypeStr);
+                        let config = this.pdfLayoutConfig[targetTag] || {left:[], right:[]};
+                        
+                        const allCats = this.checklistData[targetTag] || [];
+                        if (!allCats.length) return []; 
+                        
+                        const allCatNames = allCats.map(c => c.name);
+                        
+                        let leftNames = (config.left || []).filter(name => allCatNames.includes(name));
+                        let rightNames = (config.right || []).filter(name => allCatNames.includes(name));
+                        
+                        const existingNames = [...leftNames, ...rightNames];
+                        const missingNames = allCatNames.filter(name => !existingNames.includes(name));
+                        
+                        let tempLeft = [...leftNames];
+                        let tempRight = [...rightNames];
+
+                        missingNames.forEach(name => {
+                            if (tempLeft.length <= tempRight.length) {
+                                tempLeft.push(name);
+                            } else {
+                                tempRight.push(name);
+                            }
+                        });
+
+                        const targetNames = columnStr === 'left' ? tempLeft : tempRight;
+                        return targetNames.map(name => allCats.find(c => c.name === name)).filter(c => c);
+                    } catch(e) {
+                        return [];
+                    }
+                },
+
+                getCarFactoriesText(plate) {
+                    if(!plate) return '-'; 
+                    let facs = this.getCarFactories(plate);
+                    return facs.length > 0 ? facs.join(', ') : '-';
+                },
+                
+                detectVehicleType(rawType) {
+                    try {
+                        if (!rawType) return 'Van'; 
+                        
+                        let t = typeof rawType === 'string' ? rawType : JSON.parse(JSON.stringify(rawType));
+                        t = String(t).trim().toLowerCase();
+
+                        if (t === 'van') return 'Van';
+                        if (t === 'bus') return 'Bus';
+                        if (t === 'busซันลอง' || t === 'bus ซันลอง' || t.includes('ซันลอง') || t.includes('sunlong')) return 'Busซันลอง';
+                        if (t === 'car') return 'Car';
+                        if (t === 'ev') return 'EV';
+
+                        if (t.includes('ตู้') || t.includes('van')) return 'Van';
+                        if (t.includes('บัส') || t.includes('bus')) return 'Bus';
+                        if (t.includes('เก๋ง') || t.includes('car') || t.includes('pickup')) return 'Car';
+                        if (t.includes('ไฟฟ้า') || t.includes('ev') || t.includes('byd')) return 'EV';
+
+                        return 'Van'; 
+                    } catch(e) {
+                        return 'Van';
+                    }
+                },
+
+                login() { 
+                    this.loading = true; 
+                    google.script.run.withSuccessHandler(res => { 
+                        this.loading = false; 
+                        if(res.status === 'success') { 
+                            this.user = res.user; 
+                            this.isLoggedIn = true; 
+                            this.loginTimestamp = Date.now(); 
+                            this.heartbeatCounter = 0; 
+                            this.idleTimer = 0; 
+                            localStorage.setItem('nyt_user', JSON.stringify(res.user));
+                            localStorage.setItem('nyt_login_time', this.loginTimestamp);
+                            this.initData(); 
+                        } else { 
+                            Swal.fire('Error', res.message, 'error'); 
+                        } 
+                    }).withFailureHandler(e => { this.loading = false; }).loginUser(this.loginForm.username, this.loginForm.password); 
+                },
+                
+                logout() { 
+                    this.isLoggedIn = false; 
+                    this.user = {}; 
+                    this.currentPage = 'inspection'; 
+                    this.loginTimestamp = null; 
+                    localStorage.removeItem('nyt_user');
+                    localStorage.removeItem('nyt_login_time');
+                },
+
+                isMultiFactory(plate) { return this.getCarFactories(plate).length > 1; },
+                
+                getCarFactories(plate) { 
+                    const cleanPlate = String(plate || '').replace(/[-\s]/g, '').trim(); 
+                    if(!cleanPlate) return [];
+                    const factories = new Set(); 
+                    (this.allDrivers || []).forEach(d => { if (String(d.plate).replace(/[-\s]/g, '').trim() === cleanPlate) factories.add(d.factory); }); 
+                    if(factories.size === 0) { (this.maintenanceList || []).forEach(m => { if (String(m.plate).replace(/[-\s]/g, '').trim() === cleanPlate) factories.add(m.factory); }); } 
+                    return Array.from(factories); 
+                },
+                
+                resetIdle() { this.idleTimer = 0; },
+                
+                register() { 
+                    if(!this.regForm.pdpa) { Swal.fire('แจ้งเตือน', 'กรุณายอมรับเงื่อนไข PDPA', 'warning'); return; } 
+                    this.loading = true; 
+                    google.script.run.withSuccessHandler(res => { 
+                        this.loading = false; 
+                        if(res.status === 'success') { 
+                            Swal.fire('สำเร็จ', res.message, 'success'); 
+                            this.showRegister = false; 
+                            this.regForm = {}; 
+                        } else { 
+                            Swal.fire('Error', res.message, 'error'); 
+                        } 
+                    }).registerUser(this.regForm); 
+                },
+                
+                initData() { 
+                    this.loading = true; 
+                    google.script.run.withSuccessHandler(res => { 
+                        this.loading = false; 
+                        if(res.status === 'success') { 
+                            this.checklistData = res.checklistData || {}; 
+                            this.maintenanceList = res.data.maintenance || []; 
+                            this.allDrivers = res.data.allDrivers || []; 
+                            this.sentHistory = res.data.sent || []; 
+                            this.historyFactories = res.historyFactories || []; 
+                            this.userTotalTimes = res.data.userStats || {}; 
+                            if (res.systemConfig) { 
+                                this.systemConfig = res.systemConfig; 
+                                this.systemConfig.manualClose = (res.systemConfig.manualClose === true || res.systemConfig.manualClose === 'true'); 
+                                this.systemConfig.fastManual = (res.systemConfig.fastManual === true || res.systemConfig.fastManual === 'true'); 
+                                this.tempConfig = { ...res.systemConfig }; 
+                            } 
+                            this.updateDateRange(); 
+                        } 
+                    }).getInitialData(); 
+                },
+                
+                updateTimeCheck() { this.currentTimeVal = Date.now(); }, 
+                
+                updateDateRange() { 
+                    const y = parseInt(this.selectedStatusYear); 
+                    const m = parseInt(this.selectedStatusMonth) - 1; 
+                    const start = new Date(y, m, 1); 
+                    const end = new Date(y, m + 1, 0); 
+                    const pad = n => n<10 ? '0'+n : n; 
+                    this.trackFilters.start = `${y}-${pad(m+1)}-01`; 
+                    this.trackFilters.end = `${y}-${pad(m+1)}-${pad(end.getDate())}`; 
+                    this.trackFiltersApplied = true; 
+                },
+                
+                getFactoryStatusColor(stat) { 
+                    if (stat.count === 0) return 'border-gray-200 bg-gray-50'; 
+                    if (stat.checked === 0) return 'fac-red'; 
+                    if (stat.checked === stat.count) return 'fac-green'; 
+                    return 'fac-yellow'; 
+                },
+                
+                saveConfig() { 
+                    this.loading = true; 
+                    google.script.run.withSuccessHandler(res => { 
+                        this.loading = false; 
+                        if(res.status === 'success') { 
+                            this.systemConfig.startTime = this.tempConfig.startTime; 
+                            this.systemConfig.endTime = this.tempConfig.endTime; 
+                            this.systemConfig.manualClose = (this.tempConfig.manualClose === true || this.tempConfig.manualClose === 'true');
+                            this.systemConfig.fastStartTime = this.tempConfig.fastStartTime;
+                            this.systemConfig.fastEndTime = this.tempConfig.fastEndTime;
+                            this.systemConfig.fastManual = (this.tempConfig.fastManual === true || this.tempConfig.fastManual === 'true');
+                            this.showConfigModal = false; 
+                            Swal.fire('บันทึกสำเร็จ', 'ตั้งค่าระบบเรียบร้อย', 'success'); 
+                        } 
+                    }).saveSystemConfig(this.tempConfig); 
+                },
+
+                formatDuration(ms) { 
+                    if(!ms) return "0 นาที"; 
+                    let sec = Math.floor(ms / 1000); 
+                    let h = Math.floor(sec / 3600); 
+                    let m = Math.floor((sec % 3600) / 60); 
+                    if (h > 0) return `${h} ชม. ${m} นาที`; 
+                    return `${m} นาที`; 
+                },
+                
+                searchCar() { 
+                    if(!this.searchPlate) return; 
+                    this.loading = true; 
+                    google.script.run.withSuccessHandler(r=>{ 
+                        this.loading = false; 
+                        if(r.found){ 
+                            this.carData = r.data || {}; 
+                            if(!this.editMode){ 
+                                this.carData.mileage = ''; 
+                                this.driverAck = false; 
+                                this.suggestion = ''; 
+                                this.checks = {}; 
+                                this.originalChecks = {}; 
+                                this.textInputs = {}; 
+                                this.qty = {};
+                                this.notes = {};
+                            } 
+                            
+                            let expHtml = ''; let hasExp = false; 
+                            try { 
+                                this.docFields.forEach(f => { 
+                                    if(!f.isNotDate && this.carData[f.field]){ 
+                                        let v = this.carData[f.field]; 
+                                        let df = this.getDaysDiff(v); 
+                                        if(df !== null && df <= 0) { 
+                                            hasExp = true; 
+                                            expHtml += `<div class="bg-red-50 border-l-4 border-red-500 p-3 rounded shadow-sm mb-2"><div class="flex items-center justify-between"><span class="font-bold text-red-700 text-lg">${f.label}</span><span class="text-xs font-bold bg-red-200 text-red-800 px-2 py-1 rounded">หมดอายุ</span></div><div class="text-gray-600 text-sm mt-1">วันที่: ${this.formatDateDisplay(v)} (ผ่านมา ${Math.abs(df)} วัน)</div></div>`; 
+                                        } 
+                                    } 
+                                }); 
+                            } catch(e) {} 
+                            
+                            const checkDuplicate = () => { 
+                                try {
+                                    if(this.checkDate && !this.editMode) { 
+                                        const targetMonthStr = String(this.checkDate || '').substring(0, 7); 
+                                        const cleanPlate = String(r.data.plate || '').replace(/[-\s]/g, '').trim(); 
+                                        const dupData = (this.maintenanceList || []).find(m => { 
+                                            const mPlate = String(m.plate || '').replace(/[-\s]/g, '').trim(); 
+                                            return mPlate === cleanPlate && String(m.date || '').startsWith(targetMonthStr); 
+                                        }); 
+                                        if(dupData) { 
+                                            Swal.fire({ 
+                                                title: '⛔ คันนี้ตรวจไปแล้ว!', 
+                                                html: `<div class="text-center"><p class="mb-2">รถทะเบียน <b>${r.data.plate}</b> ได้รับการตรวจของเดือนนี้ไปแล้ว</p><p class="text-sm text-gray-600 bg-gray-100 p-2 rounded">วันที่ตรวจ: ${this.formatDateDisplay(dupData.date)}<br>ผู้ตรวจ: ${dupData.inspector}</p><p class="text-red-500 mt-2 text-xs">หากต้องการแก้ไขข้อมูล ให้ไปที่เมนู "ตรวจสอบ"</p></div>`, 
+                                                icon: 'error', 
+                                                confirmButtonText: 'รับทราบ',
+                                                confirmButtonColor: '#d33'
+                                            }).then(() => { 
+                                                this.resetForm(); 
+                                            }); 
+                                            return; 
+                                        } 
+                                    }
+                                } catch(e) {}
+                            }; 
+                            
+                            if(hasExp) { Swal.fire({ title: '⚠️ แจ้งเตือนเอกสารหมดอายุ', html: `<div class="flex flex-col gap-2 text-left">${expHtml}</div>`, icon: 'warning', confirmButtonText: 'รับทราบ', confirmButtonColor: '#d33' }).then(() => { checkDuplicate(); }); } else { checkDuplicate(); } 
+                        } else { 
+                            Swal.fire('ไม่พบข้อมูล', '', 'error'); 
+                        } 
+                    }).searchCarByPlate(this.searchPlate); 
+                },
+
+                saveInspection() { 
+                    if (!this.carData || !this.carData.plate) return; 
+                    if (!this.carData.mileage) { Swal.fire('แจ้งเตือน', 'กรุณาระบุเลขไมล์', 'warning'); return; } 
+                    
+                    let firstMissingId = null; 
+                    let firstMissingIdMob = null;
+                    let isComplete = true; 
+                    let missingItems = [];
+                    
+                    if (this.filteredChecklist && Array.isArray(this.filteredChecklist)) { 
+                        for (let catIdx = 0; catIdx < this.filteredChecklist.length; catIdx++) { 
+                            const cat = this.filteredChecklist[catIdx]; 
+                            if (!cat) continue;
+                            for (let itemIdx = 0; itemIdx < (cat.items || []).length; itemIdx++) { 
+                                const item = cat.items[itemIdx]; 
+                                const key = this.getCheckKey(cat.name, item); 
+                                
+                                if (this.editMode && !this.shouldShowItem(cat.name, item)) {
+                                    continue; 
+                                }
+
+                                if (this.checks[key] === undefined || this.checks[key] === null || this.checks[key] === '') { 
+                                    isComplete = false; 
+                                    missingItems.push(item.item);
+                                    if (!firstMissingId) {
+                                        firstMissingId = 'row-' + catIdx + '-' + itemIdx; 
+                                        firstMissingIdMob = 'mob-row-' + catIdx + '-' + itemIdx; 
+                                    } 
+                                } 
+                            } 
+                        } 
+                    } 
+                    
+                    if (!isComplete) { 
+                        Swal.fire({ 
+                            icon: 'warning', 
+                            title: 'ข้อมูลไม่ครบถ้วน', 
+                            html: `<div class="text-sm">กรุณาเลือกผลการตรวจให้ครบทุกข้อ:</div><ul class="text-left text-sm text-red-600 pl-6 mt-2">` + missingItems.slice(0, 5).map(m => `<li>${m}</li>`).join('') + (missingItems.length > 5 ? `<li>และอีก ${missingItems.length - 5} ข้อ...</li>` : '') + `</ul>`
+                        }).then(() => { 
+                            if (firstMissingId) { 
+                                setTimeout(() => { 
+                                    let el = document.getElementById(firstMissingId); 
+                                    let elMob = document.getElementById(firstMissingIdMob);
+                                    let targetEl = (el && el.offsetParent !== null) ? el : elMob;
+                                    if (targetEl) { 
+                                        const yOffset = targetEl.getBoundingClientRect().top + window.scrollY - 150;
+                                        window.scrollTo({ top: yOffset, behavior: 'smooth' });
+                                        targetEl.classList.add('highlight-row'); 
+                                        setTimeout(() => targetEl.classList.remove('highlight-row'), 2500); 
+                                    } 
+                                }, 400);
+                            } 
+                        }); 
+                        return; 
+                    } 
+
+                    if (this.editMode) {
+                        let abnormalList = [];
+                        if (this.filteredChecklist && Array.isArray(this.filteredChecklist)) { 
+                            for (let catIdx = 0; catIdx < this.filteredChecklist.length; catIdx++) { 
+                                const cat = this.filteredChecklist[catIdx]; 
+                                if (!cat) continue;
+                                for (let itemIdx = 0; itemIdx < (cat.items || []).length; itemIdx++) { 
+                                    const item = cat.items[itemIdx]; 
+                                    const key = this.getCheckKey(cat.name, item); 
+                                    
+                                    if (this.shouldShowItem(cat.name, item)) {
+                                        if (this.isAbnormal(this.checks[key])) { 
+                                            abnormalList.push(item.item);
+                                        }
+                                    }
+                                } 
+                            } 
+                        }
+                        
+                        if (abnormalList.length > 0) {
+                            Swal.fire({
+                                icon: 'warning',
+                                title: 'ยังแก้ไขไม่ครบ!',
+                                html: `<div class="text-sm text-gray-700 mb-2">ต้องซ่อมและเปลี่ยนสถานะเป็น <b>"ปกติ"</b> ให้ครบทุกข้อก่อน จึงจะส่งรออนุมัติได้:</div><ul class="text-left list-disc pl-8 text-red-600 text-sm font-bold">` + abnormalList.map(a => `<li>${a}</li>`).join('') + `</ul>`,
+                                confirmButtonText: 'กลับไปแก้ไข'
+                            });
+                            return; 
+                        }
+                    }
+                    
+                    let expiredList = []; try { this.docFields.forEach(f => { if(!f.isNotDate && this.carData[f.field]){ let v = this.carData[f.field]; let df = this.getDaysDiff(v); if(df !== null && df <= 0) { expiredList.push(f.label); } } }); } catch(e) {} if(expiredList.length > 0) { Swal.fire({ icon: 'error', title: 'ไม่สามารถบันทึกได้', html: `<div class="text-left font-bold text-red-600">พบเอกสารหมดอายุ ดังนี้:</div><ul class="text-left list-disc pl-8 mt-2 text-red-700">${expiredList.map(e=>`<li>${e}</li>`).join('')}</ul><div class="mt-4 text-sm text-gray-600">กรุณาแจ้งผู้เกี่ยวข้องเพื่อดำเนินการต่อภาษี/พรบ.</div>`, confirmButtonText: 'ตกลง', confirmButtonColor: '#d33' }); return; } 
+                    
+                    if (!this.driverAck) { Swal.fire('แจ้งเตือน', 'พขร. ต้องกดยืนยันการตรวจ', 'warning'); return; } 
+                    
+                    let finalChecks = { ...this.originalChecks, ...this.checks };
+                    const checksJson = JSON.stringify({ ...finalChecks, meta_qty: this.qty, meta_notes: this.notes, meta_text: this.textInputs, meta_suggestion: this.suggestion, meta_mileage: this.carData.mileage }); 
+                    
+                    this.loading = true; 
+
+                    const payload = { 
+                        plate: this.carData.plate, 
+                        factory: this.carData.factory, 
+                        factories: this.getCarFactories(this.carData.plate), 
+                        inspectorName: this.user.fullname, 
+                        userRole: this.user.role, 
+                        checkDate: this.checkDate, 
+                        signDateDriver: '', 
+                        checksJson: checksJson, 
+                        editRowIndex: this.editMode ? this.editItem.row : null 
+                    }; 
+                    
+                    google.script.run.withSuccessHandler(res => { 
+                        this.loading = false; 
+                        if (res.status === 'success') { 
+                            Swal.fire('บันทึกสำเร็จ', '', 'success').then(() => { 
+                                this.resetForm(); 
+                                this.cancelEdit(); 
+                                this.initData(); 
+                            }); 
+                        } else { 
+                            Swal.fire('Error', res.message, 'error'); 
+                        } 
+                    }).saveInspectionData(payload); 
+                },
+
+                processAndPush(data) { 
+                    if(!data) return; 
+                    let inspectorName = data.inspector;
+                    if (!inspectorName || inspectorName === 'undefined') {
+                        try {
+                            if (this.editMode && this.editItem) {
+                                inspectorName = this.editItem.inspector;
+                            } else if (data.checksJson) {
+                                let m = this.maintenanceList.find(x => x.plate === data.plate && x.date === data.date);
+                                if(m) inspectorName = m.inspector;
+                            }
+                        } catch(e) {}
+                    }
+                    if (!inspectorName || inspectorName === 'undefined') inspectorName = '-';
+                    
+                    let driverName = data.driver;
+                    if (!driverName || driverName === 'undefined') driverName = '-';
+
+                    let obj = { ...data, checks: {}, qty: {}, notes: {}, textInputs: {}, suggestion: '-', mileage: '-', plate: data.plate||'-', type: data.type||'-', factory: data.factory||'-', driver: driverName, route: data.route||'-', gender: data.gender||'-', phone: data.phone||'-', inspector: inspectorName, camera: data.camera||'-', gps: data.gps||'-' }; 
+                    try { if(data.checksJson){ const parsed = JSON.parse(data.checksJson); obj.checks = parsed || {}; obj.qty = parsed.meta_qty || {}; obj.notes = parsed.meta_notes || {}; obj.textInputs = parsed.meta_text || {}; obj.suggestion = parsed.meta_suggestion || '-'; obj.mileage = parsed.meta_mileage || '-'; } } catch(e){} 
+                    this.printQueue.push(obj); 
+                },
+                
+                getCheckVal(data, catName, item) { 
+                    if (!data || !data.checks) return '-'; 
+                    let val = data.checks[this.getCheckKey(catName, item)];
+                    if (!val) return '-';
+                    if (item.opt3 && val === item.opt3) return '-'; 
+                    return val; 
+                },
+                getNoteVal(data, catName, item) { if (!data || !data.notes) return ''; return data.notes[this.getCheckKey(catName, item)] || ''; },
+                getQtyVal(data, catName, item) { if (!data || !data.qty) return ''; return data.qty[this.getCheckKey(catName, item)] || ''; },
+                getTextVal(data, catName, item) { if (!data || !data.textInputs) return ''; return data.textInputs[this.getCheckKey(catName, item)] || ''; },
+                getAccessoryVal(data, key) { if (!data || !data.checks) return '-'; return data.checks[key] || '-'; },
+                
+                checkMixedFactories() {
+                    let facs = new Set(this.printQueue.map(i => i.factory));
+                    return facs.size > 1;
+                },
+
+                async triggerPrint(withCover) {
+                    if(this.printQueue.length === 0) { Swal.fire('ไม่มีข้อมูล', '', 'warning'); return; }
+                    
+                    let hasFail = this.printQueue.some(item => item.status === 'ไม่ผ่าน' || item.status === 'รอตรวจสอบ' || item.status === 'รออนุมัติ');
+                    if (hasFail) {
+                        Swal.fire('❌ ไม่อนุญาตให้พิมพ์', 'มีรถที่สถานะ "ไม่ผ่าน" หรือ "รอตรวจสอบ" อยู่ในคิว<br>กรุณาลบรถที่ไม่ผ่านออกจากคิวก่อนครับ', 'error');
+                        return;
+                    }
+
+                    if (this.checkMixedFactories()) {
+                        let confirm = await Swal.fire({
+                            title: '⚠️ มีรถหลายโรงงานผสมกัน',
+                            text: 'ในคิวมีรถจากหลายโรงงานผสมกันอยู่ ต้องการดำเนินการพิมพ์ต่อหรือไม่?',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'ดำเนินการต่อ',
+                            cancelButtonText: 'ยกเลิก'
+                        });
+                        if (!confirm.isConfirmed) return;
+                    }
+
+                    this.isPrintingCover = withCover;
+                    this.$nextTick(() => {
+                        setTimeout(() => { window.print(); }, 500); 
+                    });
+                },
+
+                async triggerPDF(withCover) { 
+                    if(!this.printQueue || this.printQueue.length === 0) { Swal.fire('ไม่มีข้อมูล', '', 'warning'); return; }
+                    
+                    let hasFail = this.printQueue.some(item => item.status === 'ไม่ผ่าน' || item.status === 'รอตรวจสอบ' || item.status === 'รออนุมัติ');
+                    if (hasFail) {
+                        Swal.fire('❌ ไม่อนุญาตให้ Save PDF', 'มีรถที่สถานะ "ไม่ผ่าน" หรือ "รอตรวจสอบ" อยู่ในคิว<br>กรุณาลบรถที่ไม่ผ่านออกจากคิวก่อนครับ', 'error');
+                        return;
+                    }
+
+                    if (this.checkMixedFactories()) {
+                        let confirm = await Swal.fire({
+                            title: '⚠️ มีรถหลายโรงงานผสมกัน',
+                            text: 'ในคิวมีรถจากหลายโรงงานผสมกันอยู่ ต้องการบันทึก PDF ต่อหรือไม่?',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'ดำเนินการต่อ',
+                            cancelButtonText: 'ยกเลิก'
+                        });
+                        if (!confirm.isConfirmed) return;
+                    }
+
+                    this.isPrintingCover = withCover;
+                    this.loading = true; 
+                    this.loadingText = 'กำลังสร้างไฟล์ PDF...';
+
+                    try { 
+                        await this.$nextTick(); 
+                        const container = document.getElementById('print-wrapper');
+                        
+                        container.style.position = 'absolute';
+                        container.style.left = '0px';
+                        container.style.top = '0px';
+                        container.style.zIndex = '-1'; 
+                        
+                        await new Promise(r => setTimeout(r, 800)); 
+
+                        const { jsPDF } = window.jspdf; 
+                        let pdf;
+                        let isFirstPage = true;
+
+                        if (withCover) {
+                            const coverEls = container.querySelectorAll('.print-cover-page');
+                            if (coverEls.length > 0) {
+                                container.style.width = '297mm';
+                                for (let c = 0; c < coverEls.length; c++) {
+                                    const coverEl = coverEls[c];
+                                    const canvas = await html2canvas(coverEl, { scale: 2, useCORS: true, windowWidth: coverEl.scrollWidth, windowHeight: coverEl.scrollHeight });
+                                    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+                                    
+                                    if (isFirstPage) {
+                                        pdf = new jsPDF('l', 'mm', 'a4'); 
+                                        isFirstPage = false;
+                                    } else {
+                                        pdf.addPage('a4', 'l');
+                                    }
+                                    pdf.addImage(imgData, 'JPEG', 0, 0, 297, 210);
+                                }
+                                container.style.width = '210mm'; 
+                            }
+                        }
+
+                        const pages = container.querySelectorAll('.print-page'); 
+                        for (let i = 0; i < pages.length; i++) { 
+                            const page = pages[i]; 
+                            const canvas = await html2canvas(page, { scale: 2, useCORS: true, windowWidth: page.scrollWidth, windowHeight: page.scrollHeight }); 
+                            const imgData = canvas.toDataURL('image/jpeg', 0.95); 
+                            
+                            if (isFirstPage) {
+                                pdf = new jsPDF('p', 'mm', 'a4'); 
+                                isFirstPage = false;
+                            } else {
+                                pdf.addPage('a4', 'p'); 
+                            }
+                            
+                            const pdfWidth = pdf.internal.pageSize.getWidth();
+                            const imgProps = pdf.getImageProperties(imgData);
+                            const pdfImgHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                            
+                            pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfImgHeight); 
+                        } 
+                        
+                        if (!pdf) throw new Error("ไม่พบหน้าเอกสาร");
+                        pdf.save('inspection_report.pdf'); 
+                        Swal.fire('บันทึกสำเร็จ', 'ดาวน์โหลด PDF เรียบร้อย', 'success'); 
+                        
+                    } catch (err) { 
+                        Swal.fire('เกิดข้อผิดพลาด', err.message, 'error'); 
+                    } finally { 
+                        const container = document.getElementById('print-wrapper');
+                        if (container) {
+                            container.style.position = 'absolute';
+                            container.style.left = '-10000px';
+                            container.style.top = '0px';
+                            container.style.zIndex = '-1000';
+                            container.style.width = 'auto';
+                        }
+                        this.loading = false; 
+                    }
+                },
+
+                openEvidenceModal(item, mode) { this.currentEvidencePlate = item.plate; this.evidenceMode = mode; this.showEvidenceModal = true; this.evidenceImages = []; if(mode === 'view') this.loadEvidence(item.plate); },
+                loadEvidence(plate) { google.script.run.withSuccessHandler(imgs => { this.evidenceImages = imgs; }).getImageEvidence(plate); },
+                viewImage(src) { this.viewingImage = src; },
+                
+                handleFileUpload(e) { 
+                    const file = e.target.files[0]; 
+                    if (!file) return; 
+                    const reader = new FileReader(); 
+                    reader.onload = (event) => { 
+                        const img = new Image(); 
+                        img.onload = () => { 
+                            const canvas = document.createElement('canvas'); 
+                            const ctx = canvas.getContext('2d'); 
+                            const maxDim = 350; 
+                            let width = img.width; 
+                            let height = img.height; 
+                            if (width > height) {
+                                if (width > maxDim) { height *= maxDim / width; width = maxDim; }
+                            } else {
+                                if (height > maxDim) { width *= maxDim / height; height = maxDim; }
+                            }
+                            canvas.width = width; 
+                            canvas.height = height; 
+                            ctx.drawImage(img, 0, 0, width, height); 
+                            const base64 = canvas.toDataURL('image/jpeg', 0.25); 
+                            
+                            if (base64.length > 50000) {
+                                Swal.fire('ขนาดภาพใหญ่เกินไป', 'ระบบสามารถรับภาพได้ขนาดเล็กเท่านั้น กรุณาถ่ายใหม่ให้มีรายละเอียดน้อยลงครับ', 'warning');
+                                return;
+                            }
+                            this.uploadEvidence(base64); 
+                        }; 
+                        img.src = event.target.result; 
+                    }; 
+                    reader.readAsDataURL(file); 
+                },
+                
+                uploadEvidence(base64) { this.loading = true; google.script.run.withSuccessHandler(res => { this.loading = false; if(res.status === 'success') { Swal.fire('อัปโหลดเรียบร้อย', '', 'success'); } else { Swal.fire('Error', res.message, 'error'); } }).saveImageEvidence(this.currentEvidencePlate, base64); },
+                deleteImage(img) { Swal.fire({ title: 'ยืนยันการลบ?', text: "รูปภาพจะถูกลบออกจากระบบทันที", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'ลบรูปภาพ', cancelButtonText: 'ยกเลิก' }).then((result) => { if (result.isConfirmed) { this.loading = true; google.script.run.withSuccessHandler(res => { this.loading = false; if(res.status === 'success') { Swal.fire('ลบสำเร็จ', '', 'success'); this.loadEvidence(this.currentEvidencePlate); } else { Swal.fire('Error', res.message, 'error'); } }).deleteImageEvidence(this.currentEvidencePlate, img.src); } }); },
+
+                addToQueue() { 
+                    if(!this.summarySearchPlate) return; 
+                    this.loading = true; 
+                    google.script.run.withSuccessHandler(res => { 
+                        this.loading = false; 
+                        if(res.found) { 
+                            let carStatus = res.data.status || 'ยังไม่ตรวจ';
+                            
+                            if (carStatus !== 'ผ่าน') {
+                                Swal.fire('❌ ไม่อนุญาตให้เพิ่มคิว', 'รถทะเบียน <b>' + res.data.plate + '</b> ยังไม่ผ่านการตรวจสอบ<br>(สถานะ: ' + carStatus + ')<br>กรุณาไปที่หน้าตรวจสอบ เพื่อแก้ไขให้ผ่านก่อนครับ', 'error');
+                                return;
+                            }
+
+                            if(this.printQueue.some(i => i.plate === res.data.plate)) { 
+                                Swal.fire('แจ้งเตือน', 'มีรถคันนี้ในคิวพิมพ์แล้ว', 'warning'); 
+                                return; 
+                            } 
+                            
+                            if (this.printQueue.length > 0) {
+                                let existingFac = this.printQueue[0].factory;
+                                let incomingFacs = this.getCarFactories(res.data.plate);
+                                if (!incomingFacs.includes(existingFac)) {
+                                    Swal.fire({
+                                        title: '⚠️ แจ้งเตือนคนละโรงงาน',
+                                        text: 'รถคันนี้ไม่ได้อยู่โรงงานเดียวกับคิวปัจจุบัน อาจทำให้ใบปะหน้ามีข้อมูลผสมกันได้ ต้องการเพิ่มหรือไม่?',
+                                        icon: 'warning',
+                                        showCancelButton: true,
+                                        confirmButtonText: 'เพิ่มเข้าคิว',
+                                        cancelButtonText: 'ยกเลิก'
+                                    }).then((result) => {
+                                        if (result.isConfirmed) {
+                                            this.proceedAddCar(res.data);
+                                        }
+                                    });
+                                    return; 
+                                }
+                            }
+
+                            this.proceedAddCar(res.data);
+
+                        } else { 
+                            Swal.fire('ไม่พบประวัติ', 'ยังไม่มีการบันทึกตรวจสภาพรถคันนี้', 'warning'); 
+                        } 
+                    }).getLatestInspectionByPlate(this.summarySearchPlate); 
+                },
+
+                proceedAddCar(data) {
+                    let factories = this.getCarFactories(data.plate);
+                    if (factories.length > 1) {
+                        let optionsObj = {};
+                        factories.forEach(f => { optionsObj[f] = 'โรงงาน ' + f; });
+                        
+                        Swal.fire({
+                            title: '⚠️ รถคันนี้วิ่งหลายโรงงาน',
+                            text: `พบทะเบียน ${data.plate} วิ่งหลายโรงงาน กรุณาเลือกโรงงาน:`,
+                            icon: 'info',
+                            input: 'select',
+                            inputOptions: optionsObj,
+                            inputPlaceholder: '-- เลือกโรงงาน --',
+                            showCancelButton: true,
+                            confirmButtonText: 'เพิ่มลงคิว',
+                            cancelButtonText: 'ยกเลิก',
+                            inputValidator: (value) => {
+                                return new Promise((resolve) => {
+                                    if (value) resolve();
+                                    else resolve('กรุณาเลือกโรงงานก่อนครับ!');
+                                });
+                            }
+                        }).then((result) => {
+                            if (result.isConfirmed && result.value) {
+                                data.factory = result.value;
+                                this.processAndPush(data);
+                                this.summarySearchPlate = '';
+                            }
+                        });
+                    } else {
+                        if(factories.length === 1) data.factory = factories[0];
+                        this.processAndPush(data); 
+                        this.summarySearchPlate = ''; 
+                    }
+                },
+                
+                addFactoryToQueue() { 
+                    if(!this.selectedPrintFactory) return; 
+                    
+                    if (this.printQueue.length > 0 && this.printQueue.some(q => q.factory !== this.selectedPrintFactory)) {
+                        Swal.fire({
+                            title: '⚠️ ข้อมูลในคิวจะผสมกัน',
+                            text: 'ในคิวมีรถของโรงงานอื่นอยู่แล้ว หากเพิ่มเข้าไป ใบปะหน้าจะแสดงข้อมูลปะปนกัน ต้องการดำเนินการต่อหรือไม่?',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonText: 'เพิ่มเข้าคิว',
+                            cancelButtonText: 'ยกเลิก'
+                        }).then((result) => {
+                            if (result.isConfirmed) this.fetchFactoryCars();
+                        });
+                    } else {
+                        this.fetchFactoryCars();
+                    }
+                },
+
+                fetchFactoryCars() {
+                    this.loading = true; 
+                    google.script.run.withSuccessHandler(res => { 
+                        this.loading = false; 
+                        if(res.length > 0) { 
+                            let filteredRes = res;
+                            if (this.printFilterStart && this.printFilterEnd) {
+                                filteredRes = res.filter(item => item.date >= this.printFilterStart && item.date <= this.printFilterEnd);
+                            } else if (this.printFilterStart) {
+                                filteredRes = res.filter(item => item.date >= this.printFilterStart);
+                            } else if (this.printFilterEnd) {
+                                filteredRes = res.filter(item => item.date <= this.printFilterEnd);
+                            }
+                            
+                            if(filteredRes.length === 0) {
+                                Swal.fire('ไม่พบข้อมูล', 'ไม่มีรถที่ตรวจในช่วงวันที่เลือก', 'info');
+                                return;
+                            }
+
+                            let passedRes = filteredRes.filter(item => item.status === 'ผ่าน');
+                            let unpassedCount = filteredRes.length - passedRes.length;
+
+                            if (passedRes.length === 0) {
+                                if (unpassedCount > 0) {
+                                    Swal.fire('❌ ไม่พบรถที่ผ่านการตรวจสอบ', 'รถทั้งหมด ' + unpassedCount + ' คันในช่วงเวลานี้ ยังไม่ผ่านการตรวจสอบหรือรออนุมัติอยู่ครับ', 'error');
+                                } else {
+                                    Swal.fire('ไม่พบข้อมูล', 'ไม่มีรถที่ตรวจในช่วงวันที่เลือก', 'info');
+                                }
+                                return;
+                            }
+
+                            passedRes.forEach(item => { 
+                                if(!this.printQueue.some(p=>p.plate===item.plate)) this.processAndPush(item); 
+                            }); 
+                            
+                            let msg = `เพิ่มรถที่ผ่านแล้วจำนวน ${passedRes.length} คัน`;
+                            if (unpassedCount > 0) {
+                                msg += `<br><br><span class="text-red-500 text-sm">*(ระบบข้ามรถที่ยังไม่ผ่านการตรวจสอบอีก ${unpassedCount} คัน)*</span>`;
+                            }
+                            Swal.fire({ title: 'เพิ่มสำเร็จ', html: msg, icon: 'success' }); 
+
+                        } else { 
+                            Swal.fire('ไม่พบข้อมูล', '', 'warning'); 
+                        } 
+                    }).getInspectionsByFactoryName(this.selectedPrintFactory); 
+                },
+
+                editChecklistItem(item) { this.newItem = { category: item.category, item: item.item, subItem: item.subItem, opt1: item.opt1, opt2: item.opt2, opt3: item.opt3, hasQty: item.hasQty, hasText: item.hasText }; this.editingSettingRow = item.row; this.editSettingMode = true; window.scrollTo({ top: 0, behavior: 'smooth' }); },
+                cancelEditSetting() { this.newItem = { category:'', item:'', subItem:'', opt1:'ปกติ', opt2:'ไม่ปกติ', opt3:'ไม่มีให้ตรวจ', hasQty:false, hasText:false, tag:this.settingFilter }; this.editSettingMode = false; this.editingSettingRow = null; },
+                saveSettingItem() { if(!this.newItem.category || !this.newItem.item) { Swal.fire('กรุณากรอกข้อมูล'); return; } this.loading=true; let action = this.editSettingMode ? 'edit' : 'add'; let payload = { newData: this.newItem, rowIndex: this.editingSettingRow, type: this.settingFilter }; google.script.run.withSuccessHandler(d => { this.checklistData = d || {}; this.loading=false; Swal.fire('Saved'); this.cancelEditSetting(); }).updateChecklistSettings(action, payload); },
+                deleteSettingItem(item) { if(confirm('Delete?')) { this.loading=true; google.script.run.withSuccessHandler(d => { this.checklistData = d || {}; this.loading=false; }).updateChecklistSettings('delete', { rowIndex: item.row, type: this.settingFilter }); } },
+                moveItem(item, direction) { this.loading = true; google.script.run.withSuccessHandler(d => { this.checklistData = d || {}; this.loading = false; }).moveChecklistItem(item.row, direction, this.settingFilter); },
+                moveCategory(catName, direction) { this.loading = true; google.script.run.withSuccessHandler(d => { this.checklistData = d || {}; this.loading = false; }).moveCategoryGroup(catName, direction, this.settingFilter); },
+                renameCategory(oldName) { Swal.fire({ title: 'เปลี่ยนชื่อหมวดหมู่', input: 'text', inputValue: oldName, showCancelButton: true, confirmButtonText: 'บันทึก', cancelButtonText: 'ยกเลิก', inputValidator: (value) => { if (!value) { return 'กรุณากรอกชื่อหมวดหมู่'; } } }).then((result) => { if (result.isConfirmed && result.value !== oldName) { this.loading = true; google.script.run.withSuccessHandler(d => { this.checklistData = d || {}; this.loading = false; Swal.fire('เรียบร้อย', 'เปลี่ยนชื่อหมวดหมู่สำเร็จ', 'success'); }).renameCategoryGroup(oldName, result.value, this.settingFilter); } }); },
+                setPage(p) { this.currentPage = p; if(p==='inspection') this.cancelEdit(); },
+                btnClass(p) { return this.currentPage===p ? 'bg-blue-700 px-3 py-1 rounded font-bold' : 'hover:bg-blue-800 px-3 py-1 rounded'; },
+                
+                getCheckKey(c, i) { 
+                    try { return String(c||'') + '|' + String(i.item||'') + (i.subItem ? '|'+i.subItem : ''); } 
+                    catch(e) { return 'error-key'; }
+                },
+                
+                applyFilters() { this.filtersApplied = true; this.currentPageNum = 1; },
+                getDaysDiff(d) { 
+                    try {
+                        if(!d) return null; let str = String(d).replace(/-/g, '/'); let p = str.split('/'); 
+                        if(!p || p.length !== 3) return null; 
+                        let D, M, Y; 
+                        if(p[0] && p[0].length === 4) { Y = parseInt(p[0]); M = parseInt(p[1]); D = parseInt(p[2]); } else { D = parseInt(p[0]); let mStr = p[1]; if(isNaN(parseInt(mStr))) { let mL = String(mStr).toLowerCase().substring(0,3); const mo={"jan":1,"feb":2,"mar":3,"apr":4,"may":5,"jun":6,"jul":7,"aug":8,"sep":9,"oct":10,"nov":11,"dec":12}; M = mo[mL] || 0; } else { M = parseInt(mStr); } Y = parseInt(p[2]); } if (Y < 100) Y += 2000; if (Y > 2400) Y -= 543; let exp = new Date(Y, M - 1, D); let now = new Date(); now.setHours(0,0,0,0); exp.setHours(0,0,0,0); if (isNaN(exp.getTime())) return null; return Math.ceil((exp - now) / (86400000)); 
+                    } catch(e) { return null; }
+                },
+                getDateClass(d) { try { let diff=this.getDaysDiff(d); if(diff===null)return 'doc-none'; if(diff<=0)return 'doc-expired'; if(diff<=7)return 'doc-danger'; if(diff<=45)return 'doc-warn'; return 'doc-ok'; } catch(e) { return 'doc-none'; } },
+                formatDateDisplay(d) { try { if(!d)return'-'; let p=String(d).split('-'); if(p && p.length===3)return `${p[2]}/${p[1]}/${p[0]}`; return d; } catch(e) { return '-'; } },
+                calculateDaysOver(dStr) { try { if(!dStr)return 0; let p=String(dStr).split('-'); let d=new Date(p[0],p[1]-1,p[2]); return Math.floor((new Date()-d)/86400000); } catch(e) { return 0; } },
+                adminApprove(item){ Swal.fire({title:'ยืนยัน?',showCancelButton:true}).then(r=>{if(r.isConfirmed){this.loading=true; google.script.run.withSuccessHandler(()=>{this.loading=false;Swal.fire('Approved');this.initData()}).adminApproveInspection(item.row)}}); },
+                
+                startEdit(item) { 
+                    this.editMode=true; 
+                    this.editItem=item; 
+                    try{
+                        let d=JSON.parse(item.checks); 
+                        this.originalChecks = JSON.parse(JSON.stringify(d)); 
+                        this.carData={plate:item.plate, factory:item.factory, mileage:d.meta_mileage, carTypeAW: item.carTypeAW||item.type, driver:item.driver}; 
+                        this.checks=d; 
+                        this.checkDate=item.date; 
+                        this.suggestion=d.meta_suggestion||''; 
+                        this.qty=d.meta_qty||{}; 
+                        this.notes=d.meta_notes||{}; 
+                        this.textInputs=d.meta_text||{}; 
+                    }catch(e){} 
+                    this.currentPage='inspection'; 
+                },
+                cancelEdit() { 
+                    this.editMode=false; 
+                    this.editItem=null; 
+                    this.originalChecks = {};
+                    this.carData={}; 
+                    this.checks={}; 
+                    this.qty={}; 
+                    this.notes={}; 
+                    this.textInputs={}; 
+                },
+                
+                getFailedItems(json){ 
+                    try{
+                        let o=JSON.parse(json); 
+                        let f=[]; 
+                        const n=["ไม่ปกติ","ชำรุด","เสียหาย","ใช้ไม่ได้","ใช้งานไม่ได้","แย่","ปรับปรุง","ไม่ผ่าน","ต้องแก้ไข","ผิดปกติ","ไม่พร้อม","ไม่ครบ","แตก/ร้าว","ไม่มี","หมดอายุ"]; 
+                        for(let k in o){
+                            if(typeof o[k]==='string' && !String(k).startsWith('meta_')){ 
+                                let val = String(o[k]);
+                                if(val === 'ไม่มีให้ตรวจ' || val === 'ไม่มีสำหรับโรงงานนี้' || val.includes('ไม่มีเนื่องจากเป็นมาตรฐานของลูกค้า')) continue;
+                                if(val !== 'ไม่ชำรุด' && val !== 'ปกติ' && n.some(x=>val.indexOf(x)>-1)) f.push(String(k).split('|')[1]+' ('+o[k]+')'); 
+                            }
+                        } 
+                        return f;
+                    }catch(e){return []} 
+                },
+
+                isAbnormal(v){ 
+                    try {
+                        if(v === null || v === undefined || v === 'ไม่ชำรุด' || v === 'ปกติ') return false; 
+                        const strV = String(v); 
+                        if(strV === 'ไม่มีให้ตรวจ' || strV === 'ไม่มีสำหรับโรงงานนี้' || strV.includes('ไม่มีเนื่องจากเป็นมาตรฐานของลูกค้า') || strV === 'ผ่าน') return false;
+                        const n=["ไม่ปกติ","ชำรุด","เสียหาย","ใช้ไม่ได้","ใช้งานไม่ได้","แย่","ปรับปรุง","ไม่ผ่าน","ต้องแก้ไข","ผิดปกติ","ไม่พร้อม","ไม่ครบ","แตก/ร้าว","ไม่มี","หมดอายุ"]; 
+                        return n.some(x=>strV.includes(x)); 
+                    } catch(e) { return false; }
+                },
+
+                resetForm() { this.carData = {}; this.checks = {}; this.originalChecks = {}; this.qty = {}; this.notes = {}; this.textInputs = {}; this.searchPlate = ''; this.driverAck = false; this.suggestion = ''; this.checkDate = new Date().toISOString().split('T')[0]; }
+            }
+        });
+
+        app.config.errorHandler = (err, instance, info) => {
+            console.error("Vue Error:", err, info);
+            Swal.fire({
+                icon: 'error',
+                title: 'ระบบพบข้อผิดพลาด!',
+                html: `โปรดแจ้งทีมพัฒนา:<br><br><span class="text-xs text-red-500">${err.stack || err.message}</span>`,
+            });
+        };
+
+        app.mount('#app');
+    </script>
+</body>
+</html>
+<script>
+    const { createApp } = Vue;
+
+    // *** วาง URL ที่ได้จากขั้นตอนที่ 1 ตรงนี้ ***
+    const WEB_APP_URL = "ใส่_URL_Web_App_ของคุณที่นี่"; 
+
+    const app = createApp({
+        data() {
+            return {
+                // ... (ข้อมูล data ทั้งหมดคงเดิมเหมือนที่คุณส่งมา) ...
+                // ผมขอย่อส่วนที่เปลี่ยนแปลงเพื่อการ Copy วางที่ง่ายขึ้น
+            }
+        },
+        methods: {
+            // ฟังก์ชันใหม่สำหรับเรียก API
+            async callApi(action, payload = {}) {
+                this.loading = true;
+                try {
+                    const response = await fetch(WEB_APP_URL, {
+                        method: 'POST',
+                        body: JSON.stringify({ action, payload })
+                    });
+                    const result = await response.json();
+                    this.loading = false;
+                    return result;
+                } catch (error) {
+                    this.loading = false;
+                    console.error("API Error:", error);
+                    Swal.fire('เชื่อมต่อฐานข้อมูลล้มเหลว', 'กรุณาตรวจสอบอินเทอร์เน็ตหรือ URL API', 'error');
+                    return { status: 'error' };
+                }
+            },
+
+            // แก้ไขฟังก์ชันเดิมให้เรียกผ่าน callApi แทน google.script.run
+            async login() {
+                const res = await this.callApi("loginUser", { 
+                    username: this.loginForm.username, 
+                    password: this.loginForm.password 
+                });
+                if (res.status === 'success') {
+                    this.user = res.user;
+                    this.isLoggedIn = true;
+                    this.loginTimestamp = Date.now();
+                    localStorage.setItem('nyt_user', JSON.stringify(res.user));
+                    localStorage.setItem('nyt_login_time', this.loginTimestamp);
+                    this.initData();
+                } else {
+                    Swal.fire('Error', res.message, 'error');
+                }
+            },
+
+            async initData() {
+                const res = await this.callApi("getInitialData");
+                if (res.status === 'success') {
+                    this.checklistData = res.checklistData || {};
+                    this.maintenanceList = res.data.maintenance || [];
+                    this.allDrivers = res.data.allDrivers || [];
+                    this.sentHistory = res.data.sent || [];
+                    this.historyFactories = res.historyFactories || [];
+                    this.userTotalTimes = res.data.userStats || {};
+                    if (res.systemConfig) {
+                        this.systemConfig = res.systemConfig;
+                        this.systemConfig.manualClose = (res.systemConfig.manualClose === true || res.systemConfig.manualClose === 'true');
+                        this.systemConfig.fastManual = (res.systemConfig.fastManual === true || res.systemConfig.fastManual === 'true');
+                    }
+                    this.updateDateRange();
+                }
+            },
+
+            async searchCar() {
+                if(!this.searchPlate) return;
+                const r = await this.callApi("searchCarByPlate", { plate: this.searchPlate });
+                if (r.found) {
+                    this.carData = r.data || {};
+                    // ... (ส่วนแจ้งเตือนวันหมดอายุใน searchCar ของเดิม ยกมาวางต่อได้เลย) ...
+                } else {
+                    Swal.fire('ไม่พบข้อมูล', '', 'error');
+                }
+            },
+
+            async saveInspection() {
+                // ... (Validation ข้อมูลก่อนเซฟ ของเดิมคงไว้) ...
+                
+                // ส่วนส่งข้อมูล
+                const payload = { 
+                    plate: this.carData.plate,
+                    // ... (จัดเตรียม payload เหมือนเดิมที่คุณส่งมา) ...
+                    checksJson: JSON.stringify({...}) 
+                };
+                
+                const res = await this.callApi("saveInspectionData", payload);
+                if (res.status === 'success') {
+                    Swal.fire('บันทึกสำเร็จ', '', 'success').then(() => {
+                        this.resetForm();
+                        this.initData();
+                    });
+                } else {
+                    Swal.fire('Error', res.message, 'error');
+                }
+            }
+            
+            // หมายเหตุ: ฟังก์ชันอื่นๆ (getInspectionsByFactoryName, etc.) 
+            // ให้เปลี่ยนจาก google.script.run เป็น await this.callApi("ชื่อฟังก์ชัน", payload) ในลักษณะเดียวกันครับ
+        }
+    });
+    app.mount('#app');
+</script>
